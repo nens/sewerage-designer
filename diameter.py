@@ -22,7 +22,7 @@ Possible diameters are: 250,315,400,500,600,700,etc..
 import numpy as np
 
 #user-defined variables:
-Q=0.1                   #known discharge [m3/s]
+Q=1                     #known discharge [m3/s]
 V_MAX=0.5               #initial max velocity [m/s]
 S_MAX=1/400             #max hydraulic gradient [-]
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
@@ -54,7 +54,11 @@ def find_diameter(D):
             continue
         else:
             temp.append(d) #temp list, for in case D_OPTIONS is not in ascending order
-    D=min(temp)
+    if temp:
+        D=min(temp)
+    else:
+        raise Exception('Diameter found is bigger than all the pre-defined possibilities!')
+
     return D
 
 def increase_diameter(D):
