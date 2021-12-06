@@ -22,7 +22,7 @@ Possible diameters are: 250,315,400,500,600,700,etc..
 import numpy as np
 
 #user-defined variables:
-Q=1                     #known discharge [m3/s]
+Q=0.025                 #known discharge [m3/s]
 V_MAX=0.5               #initial max velocity [m/s]
 S_MAX=1/400             #max hydraulic gradient [-]
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
@@ -78,7 +78,7 @@ def increase_diameter(D):
 def colebrook_white(g,D,k,vi,vmax):
     #vcalc=(-2*np.sqrt(2*g*D*Smax))*np.log((k/(3.7*D))+((2.5*vi)/(D*np.sqrt(2*g*D*Smax))))
     #isolation of S found at https://civilweb-spreadsheets.com/drainage-design-spreadsheets/pipe-flow-calculator/colebrook-white-equation/    
-    Scalc=vmax**2/(8*g*D*(np.log10((k/(3.7*D))+((6.28*vmax)/(vmax*D))**0.89))**2)
+    Scalc=vmax**2/(8*g*D*(np.log10((k/(3.7*D))+((6.28*vi)/(vmax*D))**0.89))**2)
         
     return Scalc
 
