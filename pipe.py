@@ -148,6 +148,13 @@ class Pipe:
 
         self.validate_feature(feature)
     
+    def get_intermediates(p1,p2,nb_points):
+        x_spacing = (p2[0] - p1[0]) / (nb_points + 1)
+        y_spacing = (p2[1] - p1[1]) / (nb_points + 1)
+    
+        return [[p1[0] + i * x_spacing, p1[1] +  i * y_spacing] 
+                for i in range(1, nb_points+1)]
+        
     def calculate_elevation(self, elevation_rasterband, gt):
         dem_no_data_value =  elevation_rasterband.GetNoDataValue()
                 
@@ -159,17 +166,19 @@ class Pipe:
         p_target_x = int((pipe_target_coordinates[0] - gt[0]) / gt[1]) #x pixel
         p_target_y = int((pipe_target_coordinates[1] - gt[3]) / gt[5]) #y pixel
                     
-        p_source_dem = elevation_rasterband.ReadAsArray(p_source_x,p_source_y,1,1).flat[0]
-        p_target_dem = elevation_rasterband.ReadAsArray(p_target_x,p_target_y,1,1).flat[0]
+        # sample dem for intermediate points
+        self.points=[];self.nb_points=100
+        self.points.append([p_source_x,p_source_y])
+        for point in get_intermediates([p_source_x,p_source_y],[p_target_x,p_target_y],self.nb_points):
+            self.points.append(point)
+        self.points.append([p_target_x,p_target_y])
         
-        if p_source_dem == dem_no_data_value:
-            p_source_dem = None
-
-        if p_target_dem == dem_no_data_value:
-            p_target_dem = None
-        
-        self.start_elevation = p_source_dem
-        self.end_elevation = p_target_dem
+        self.dem_elevation=[]
+        for point in self.points:
+            elevation=dem_rb.ReadAsArray(point[0],point[1],1,1)[0][0]
+            if elevation == dem_no_data_value:
+                elevation = None
+            self.dem_elevation.append(elevation)
         
     def calculate_discharge(self, design_rain):   
         
@@ -196,7 +205,21 @@ class Pipe:
     
     
     def calculate_cover_depth(self):
-        pass
+        
+        thickness = 0.1 #voorbeeld wanddikte (should be based on material, which should be based on diameter)
+        
+        pipe_elevation=[]
+        pipe_elevation.append(self.start_level)
+        for elevation in get_intermediates([self.start_level,self.start_level],[self.end_level,self.end_level],self.nb_points):
+            pipe_elevation.append(elevation[0])
+        pipe_elevation.append(self.end_level)
+
+        cover_depths=[]
+        for i in range(len(self.points)):
+            cover_depths.append(self.dem_elevation[i]-(self.pipe_elevation[i]+self.diameter+thickness))
+        
+        # minimale cover depth
+        self.cover_depth=min(cover_depths)
         
     
     def validate_feature(self, feature):        
