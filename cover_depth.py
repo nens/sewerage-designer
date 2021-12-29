@@ -112,33 +112,48 @@ def calculate_cover_depth(dem_fn,trace_fn):
     
         p_target_x = int((edge_target_coordinates[0] - gt[0]) / gt[1]) #x pixel
         p_target_y = int((edge_target_coordinates[1] - gt[3]) / gt[5]) #y pixel
-                
-        p_source_dem = dem_rb.ReadAsArray(p_source_x,p_source_y,1,1)
-        p_target_dem = dem_rb.ReadAsArray(p_target_x,p_target_y,1,1)
         
-        if p_source_dem is None:
-            print('Startpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
-            raise Exception('Startpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
-        if p_target_dem is None:
-            print('Endpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
-            raise Exception('Endpoint of pipe {leiding_id} is outside DEM extent'.format(leiding_id = feature_id))
+        # sample dem voor tussenliggende punten
+        def intermediates(p1,p2,nb_points):
+            x_spacing = (p2[0] - p1[0]) / (nb_points + 1)
+            y_spacing = (p2[1] - p1[1]) / (nb_points + 1)
         
-        p_source_dem = p_source_dem[0]
-        p_target_dem = p_target_dem[0]
-                        
-        if p_source_dem == demNoData:
-            raise Exception('No Data value in DEM for startpoint of pipe {leiding_id}'.format(leiding_id = feature_id))
-        if p_target_dem == demNoData:
-            raise Exception('No Data value in DEM for endpoint of pipe {leiding_id}'.format(leiding_id = feature_id))  
+            return [[p1[0] + i * x_spacing, p1[1] +  i * y_spacing] 
+                    for i in range(1, nb_points+1)]
+        
+        points=[]
+        points.append([p_source_x,p_source_y])
+        for point in intermediates([p_source_x,p_source_y],[p_target_x,p_target_y],100):
+            points.append(point)
+        points.append([p_target_x,p_target_y])
+        
+        dem_elevation=[]
+        for point in points:
+            dem_elevation.append(dem_rb.ReadAsArray(point[0],point[1],1,1)[0][0])
 
-        cover_depth=float(min(p_source_dem-feature.lvl_start,p_target_dem-feature.lvl_end)[0])
+        # bereken ook de bovenkant buis ter hoogte van deze punten
+        diameter = 0.4 #voorbeeld diameter
+        thickness = 0.1 #voorbeeld wanddikte
+        pipe_elevation=[]
+        pipe_elevation.append(feature.lvl_start)
+        for elevation in intermediates([feature.lvl_start,feature.lvl_start],[feature.lvl_end,feature.lvl_end],100):
+            pipe_elevation.append(elevation[0])
+        pipe_elevation.append(feature.lvl_end)
+
+        # bereken de cover depths
+        cover_depths=[]
+        for i in range(len(points)):
+            cover_depths.append(dem_elevation[i]-(pipe_elevation[i]+diameter+thickness))
+        
+        # minimale cover depth
+        cover_depth=min(cover_depths)
         
         feature.SetField("coverdepth",cover_depth)
         trace_layer.SetFeature(feature)
         feature = None
-           
-    return p_source_dem,p_target_dem,cover_depth
+                   
+    return p_source_x,p_source_y,p_target_x,p_target_y,int_points,points,dem_elevation,pipe_elevation,cover_depths,cover_depth
 
 if __name__ == "__main__":
-    create_shp(trace_fn)
-    p_source_dem,p_target_dem,cover_depth=calculate_cover_depth(dem_fn,trace_fn)
+    #create_shp(trace_fn)
+    p_source_x,p_source_y,p_target_x,p_target_y,int_points,points,dem_elevation,pipe_elevation,cover_depths,cover_depth=calculate_cover_depth(dem_fn,trace_fn)
