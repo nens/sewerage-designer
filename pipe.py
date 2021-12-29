@@ -14,9 +14,15 @@ import json
 from constants import *
 from colebrook_white import ColebrookWhite
 
+from utils import get_intermediates
+
 # Timestep of design rain is 5 minutes
 DESIGN_RAIN_TIMESTEP = 300
 BGT_INLOOPTABEL_REQUIRED_FIELDS = ['bgt_identificatie', 'gemengd_riool', 'pipe_code_gemengd_riool', 'hemelwaterriool', 'pipe_code_hemelwaterriool', 'vgs_hemelwaterriool', 'pipe_code_vgs_hemelwaterriool', 'infiltratievoorziening', 'pipe_code_infiltratievoorziening']
+LINE_SAMPLE_POINTS = 100
+
+MATERIAL_THICKNESS = {'PVC' : 0.1,
+                      'Concrete' : 0.2}
 
 class InvalidGeometryException:
     pass
@@ -153,15 +159,8 @@ class Pipe:
         self.surface_area_discharge = None
         self.max_hydraulic_gradient = None
         self.distance_to_outlet = None
-
+        self.minimum_cover_depth = None
         self.validate_feature(feature)
-
-    def get_intermediates(p1,p2,nb_points):
-        x_spacing = (p2[0] - p1[0]) / (nb_points + 1)
-        y_spacing = (p2[1] - p1[1]) / (nb_points + 1)
-
-        return [[p1[0] + i * x_spacing, p1[1] +  i * y_spacing]
-                for i in range(1, nb_points+1)]
 
     def calculate_elevation(self, elevation_rasterband, gt):
         dem_no_data_value =  elevation_rasterband.GetNoDataValue()
@@ -175,19 +174,24 @@ class Pipe:
         p_target_y = int((pipe_target_coordinates[1] - gt[3]) / gt[5]) #y pixel
 
         # sample dem for intermediate points
-        self.points=[];self.nb_points=100
-        self.points.append([p_source_x,p_source_y])
-        for point in get_intermediates([p_source_x,p_source_y],[p_target_x,p_target_y],self.nb_points):
-            self.points.append(point)
-        self.points.append([p_target_x,p_target_y])
+        points=[]
+        points.append([p_source_x,p_source_y])
+        
+        for point in get_intermediates([p_source_x,p_source_y],[p_target_x,p_target_y], LINE_SAMPLE_POINTS):
+            points.append(point)
+        points.append([p_target_x,p_target_y])
 
-        self.dem_elevation=[]
-        for point in self.points:
-            elevation=dem_rb.ReadAsArray(point[0],point[1],1,1)[0][0]
+        dem_elevation=[]
+        for point in points:
+            elevation=elevation_rasterband.ReadAsArray(point[0],point[1],1,1)[0][0]
             if elevation == dem_no_data_value:
                 elevation = None
-            self.dem_elevation.append(elevation)
-
+            dem_elevation.append(elevation)
+            
+        self.start_elevation = dem_elevation[0]
+        self.end_elevation = dem_elevation[-1]
+        self.lowest_elevation = min(dem_elevation)
+                
     def calculate_discharge(self, design_rain):
 
         #TODO tijdstap omrekeken
@@ -214,24 +218,21 @@ class Pipe:
         estimated_diameter = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter
 
-    def calculate_cover_depth(self):
 
-        thickness = 0.1 #voorbeeld wanddikte (should be based on material, which should be based on diameter)
+    def set_material(self):
+        
+        if self.diameter is not None:
+            if self.diameter < 0.315:
+                self.material = 'PVC'
+            else:
+                self.material = 'Concrete'
 
-        pipe_elevation=[]
-        pipe_elevation.append(self.start_level)
-        for elevation in get_intermediates([self.start_level,self.start_level],[self.end_level,self.end_level],self.nb_points):
-            pipe_elevation.append(elevation[0])
-        pipe_elevation.append(self.end_level)
+    def calculate_minimum_cover_depth(self, minimal_cover_depth):
 
-        cover_depths=[]
-        for i in range(len(self.points)):
-            cover_depths.append(self.dem_elevation[i]-(self.pipe_elevation[i]+self.diameter+thickness))
-
-        # minimale cover depth
-        self.cover_depth=min(cover_depths)
-
-
+        material_thickness = MATERIAL_THICKNESS[self.material]
+        minimum_cover_depth = self.lowest_elevation - (minimal_cover_depth + self.diameter + material_thickness)
+        self.minimum_cover_depth = minimum_cover_depth
+        
     def validate_feature(self, feature):
         if len(self.points) != 2:
             raise InvalidGeometryException
@@ -261,6 +262,7 @@ class PipeNetwork:
     def __init__(self):
         self.network = nx.DiGraph()
         self.sewerage_type = None
+        self.outlet_level = None
         self.pipes = {}
 
     def add_pipe(self, pipe : Pipe):
@@ -292,15 +294,20 @@ class PipeNetwork:
         #TODO opgeven minimale waking
         #TODO waking over gehele trace berekenen
         #TODO aanpassen hydraulische gradient op basis van evaluatie
-        distance_matrix = dict(nx.all_pairs_dijkstra(self.reverse_network, weight='length'))
 
+        distance_matrix = dict(nx.all_pairs_dijkstra(self.reverse_network, weight='length'))
+        
         # Get the distance dictionary for the end node
         distance_dictionary = distance_matrix[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
         furthest_edge = self.network.edges(furthest_node, data=True)
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
-
-        max_hydraulic_gradient = furthest_pipe.start_elevation / distance
+        
+        print(furthest_node, distance)
+        print(furthest_pipe.start_elevation, self.outlet_level)
+        
+        
+        max_hydraulic_gradient = (furthest_pipe.start_elevation - self.outlet_level) / distance
 
         for pipe in self.pipes:
             setattr(self.pipes[pipe], 'max_hydraulic_gradient',  max_hydraulic_gradient)
@@ -312,22 +319,13 @@ class PipeNetwork:
             connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_id = str(pipe.id), pipe_type = self.sewerage_type)
             pipe_connected_surface[pipe.id] = connected_surface_area
 
-        for edge in self.network.edges(data=True):
+        for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
-
             if getattr(pipe, 'connected_surface_area') is None:
                 start_node = edge[0]
-                upstream_nodes = [n for n in nx.traversal.bfs_tree(self.network, start_node , reverse=True) if n != start_node]
-                upstream_pipes = set()
-                upstream_pipes.add(pipe.id)
-                for i, node in enumerate(upstream_nodes):
-                    if i == len(upstream_nodes) - 1:
-                        break
-                    upstream_edge = (node, upstream_nodes[i+1])
-                    upstream_pipe = self.get_pipe_with_edge(upstream_edge)
-                    upstream_pipes.add(upstream_pipe.id)
-
-                pipe_total_connected_surface = sum([pipe_connected_surface[pipe_id] for pipe_id in upstream_pipes])
+                upstream_pipes = self.find_upstream_pipes(start_node) 
+                upstream_pipes.append(pipe)
+                pipe_total_connected_surface = sum([pipe_connected_surface[pipe.id] for pipe in upstream_pipes])                
                 setattr(pipe, 'connected_surface_area', pipe_total_connected_surface)
 
     def add_id_to_nodes(self):
@@ -335,16 +333,34 @@ class PipeNetwork:
             self.network.nodes[node]['id'] = i
 
     def get_pipe_with_edge(self, edge):
+        
+        if not isinstance(edge, nx.classes.reportviews.OutEdgeDataView): 
+            edge = self.network.edges(edge, data=True)
+        
         edge_data = list(edge)[0][2]
         edge_id = edge_data['id']
         pipe = self.pipes[edge_id]
         return pipe
+    
+    def find_upstream_pipes(self, node):
+        
+        """
+        Find all connected upstream pipes in the network from a starting node        
+        """
 
+        upstream_edges = nx.edge_dfs(self.network, node, orientation='reverse')
+        upstream_pipes = []
+        for edge in upstream_edges:
+            pipe = self.get_pipe_with_edge(edge)
+            upstream_pipes.append(pipe)
+        
+        return(upstream_pipes)
+    
     def validate_network(self):
         #TODO Check for outlets connection, all pipes connected, at least one outlet
         pass
 
-    def generate_output_layer(self):
+    def create_result_layer(self):
         pass
 
     @property
@@ -355,13 +371,17 @@ class PipeNetwork:
 class ITPipeNetwork(PipeNetwork):
 
     def __init__(self):
-        self.network_type = 'infiltratieriool'
+        self.network_type = None
 
     def add_weir(weir: Weir):
         pass
 
     def calculate_required_cover_depth(self, minimum_cover_depth):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
+        lowest_cover_depth_network = min(pipe.minimum_cover_depth for pipe in self.network.pipes)
+        
+        
+        
         pass
 
     def estimate_internal_weir_locations(self):

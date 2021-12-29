@@ -78,7 +78,7 @@ class ColebrookWhite:
     def iterate_diameters(self):
         Scalc = self.colebrook_white()
         
-        while Scalc > self.Smax or self.D_design != D_OPTIONS[-1]:
+        while Scalc > self.Smax and self.D_design != D_OPTIONS[-1]:
             self.increase_diameter()
             self.v_max = self.calc_vmax()
             Scalc = self.colebrook_white()

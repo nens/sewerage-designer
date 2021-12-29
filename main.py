@@ -23,16 +23,17 @@ if __name__ == '__main__':
     #TODO Stuwputten bepalen voor stelsels met uitlaten, indicatie voor uitlaat stelsel zonder stuwputten
     #TODO NWRW model factors implementeren voor bgt inlooptabel
     #TODO Niet dubbel oppervlak tellen bij aangesloten oppervlak
+    #TODO DOwnload empty geopackge from GUI
         
     test_tracing = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\zundert_test_28992.gpkg'
     dem_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\Zundert.tif'
-    bgt_inlooptabel = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\bgt_inlooptabel.gpkg'
+    bgt_inlooptabel_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\bgt_inlooptabel.gpkg'
     network_type = 'gemengd_riool'
     design_rain = '9'
     test_tracing_ds = ogr.Open(test_tracing)
     
     # Load BGT Inlooptabel
-    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel)
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_fn)
     
     # Load DEM rasterband and geotransform
     dem_ds = gdal.Open(dem_fn)
@@ -46,6 +47,7 @@ if __name__ == '__main__':
     # Define a new pipe network
     it_sewerage = PipeNetwork()
     it_sewerage.sewerage_type = network_type
+    it_sewerage.outlet_level = 6.5
     
     # Add some pipes
     for feature in pipes:
@@ -63,15 +65,19 @@ if __name__ == '__main__':
             nx.set_node_attributes(it_sewerage.network, attr)
         else:
             raise KeyError('Outlet coordinate is not a node in the network')
-        
-    # Calculate max hydraulic gradient possible for the network
-    it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate)
+            
     it_sewerage.determine_connected_surface_area_totals(bgt_inlooptabel = bgt_inlooptabel)
+    it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate)
+
     
     # Calculate the capacity for all the pipes 
     for pipe_id, pipe in it_sewerage.pipes.items():
         # Use Colebrook-White to estimate a diameter
-        pipe.calculate_discharge(design_rain=design_rain)
+        pipe.calculate_discharge(design_rain=design_rain)        
         pipe.calculate_diameter()
+        pipe.set_material()
+        
+    # Determine the depth fo
+        
 
 
