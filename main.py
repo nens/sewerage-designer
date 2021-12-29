@@ -6,7 +6,7 @@ import networkx as nx
 import json
 
 from constants import *
-from pipe import Pipe, Outlet, BGTInloopTabel, PipeNetwork    
+from sewerage_designer import Pipe, Outlet, BGTInloopTabel, PipeNetwork, ITPipeNetwork  
 
 if __name__ == '__main__':
     
@@ -21,33 +21,37 @@ if __name__ == '__main__':
     #TODO opnkippen stelsel o.b.v stuwputten, optellen debieten
     #TODO checken diameters opeenvolgende buizen, ook bij stuwputten nooit kleiner
     #TODO Stuwputten bepalen voor stelsels met uitlaten, indicatie voor uitlaat stelsel zonder stuwputten
-    #TODO NWRW model factors implementeren voor bgt inlooptabel
+    #TODO NWRW model factors implementeren voor bgt inlooptabel,. vermenigvulden percentage verharding
     #TODO Niet dubbel oppervlak tellen bij aangesloten oppervlak
     #TODO DOwnload empty geopackge from GUI
         
     test_tracing = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\zundert_test_28992.gpkg'
     dem_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\Zundert.tif'
     bgt_inlooptabel_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\bgt_inlooptabel.gpkg'
-    network_type = 'gemengd_riool'
-    design_rain = '9'
-    test_tracing_ds = ogr.Open(test_tracing)
     
-    # Load BGT Inlooptabel
-    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_fn)
+    # Settings
+    network_type = 'infiltratieriool'
+    design_rain = '7'
+    waking = 0
     
+
+    test_tracing_ds = ogr.Open(test_tracing, 1)
+            
     # Load DEM rasterband and geotransform
     dem_ds = gdal.Open(dem_fn)
     dem_rb = dem_ds.GetRasterBand(1)
     gt = dem_ds.GetGeoTransform()
+
+    # Load BGT Inlooptabel
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_fn)
 
     # Get pipes 
     pipes = test_tracing_ds.GetLayer('pipe')
     outlets = test_tracing_ds.GetLayer('outlet')
     
     # Define a new pipe network
-    it_sewerage = PipeNetwork()
-    it_sewerage.sewerage_type = network_type
-    it_sewerage.outlet_level = 6.5
+    it_sewerage = ITPipeNetwork()
+    it_sewerage.outlet_level = 6
     
     # Add some pipes
     for feature in pipes:
@@ -65,19 +69,36 @@ if __name__ == '__main__':
             nx.set_node_attributes(it_sewerage.network, attr)
         else:
             raise KeyError('Outlet coordinate is not a node in the network')
-            
+    
+    # Determine connected surface areas and the max hydraulic gradient for the whole network
     it_sewerage.determine_connected_surface_area_totals(bgt_inlooptabel = bgt_inlooptabel)
     it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate)
 
-    
     # Calculate the capacity for all the pipes 
     for pipe_id, pipe in it_sewerage.pipes.items():
         # Use Colebrook-White to estimate a diameter
         pipe.calculate_discharge(design_rain=design_rain)        
         pipe.calculate_diameter()
         pipe.set_material()
+        pipe.calculate_minimum_cover_depth(minimal_cover_depth=1)
         
-    # Determine the depth fo
+    # Determine the depth for all pipes
+    it_sewerage.calculate_required_cover_depth()
+    
+    # # Save results to pipes layer
+    for pipe in it_sewerage.pipes.values():
+        pipe.write_properties_to_feature()
+        pipes.SetFeature(pipe.feature)
+        pipe.feature = None
+
+    #         
+    pipes = None
+    test_tracing_ds = None 
+
+    
+   
+        
+    
         
 
 

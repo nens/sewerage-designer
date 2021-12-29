@@ -85,27 +85,3 @@ class ColebrookWhite:
         
         return self.D_design
         
-    
-# if __name__ == "__main__":
-#     q,vmax,Smax,k,g,vi=initial_values()
-#     D=calc_D(q,vmax)
-#     print('Initial calculated diameter = 'f"{D*1000:.0f}"' mm.')
-#     D=find_diameter(D)
-#     print('Closest avalaible diameter = 'f"{D*1000:.0f}"' mm.')
-#     Scalc=colebrook_white(g,D,k,vi,vmax)
-#     response=''
-#     while response!='break':
-#         if Scalc>Smax:
-#             print('Diameter 'f"{D*1000:.0f}"' mm is too small.')
-#             print('Hydraulic gradient = 'f"{Scalc:.4f}"', while max = 'f"{Smax:.4f}"'.')
-#             print('Increasing diameter and recalculating vmax...')
-#             D=increase_diameter(D)
-#             print('');print('Trying again with D = 'f"{D*1000:.0f}"' mm.')
-#             vmax=calc_vmax(q,D)
-#             Scalc=colebrook_white(g,D,k,vi,vmax)
-#         else:
-#             print('Optimal diameter found: 'f"{D*1000:.0f}"' mm.')
-#             print('Hydraulic gradient = 'f"{Scalc:.4f}"', while max = 'f"{Smax:.4f}"'.')
-#             response='break'
-
-  

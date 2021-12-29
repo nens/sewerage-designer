@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/sewerage_designer" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
