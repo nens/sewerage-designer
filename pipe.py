@@ -10,12 +10,12 @@ import os
 from osgeo import gdal, ogr
 import networkx as nx
 import json
-import logging
 
 from constants import *
 from colebrook_white import ColebrookWhite
 
-
+# Timestep of design rain is 5 minutes
+DESIGN_RAIN_TIMESTEP = 300
 BGT_INLOOPTABEL_REQUIRED_FIELDS = ['bgt_identificatie', 'gemengd_riool', 'pipe_code_gemengd_riool', 'hemelwaterriool', 'pipe_code_hemelwaterriool', 'vgs_hemelwaterriool', 'pipe_code_vgs_hemelwaterriool', 'infiltratievoorziening', 'pipe_code_infiltratievoorziening']
 
 class InvalidGeometryException:
@@ -57,7 +57,7 @@ class PumpingStation(ogr.Feature):
 class BGTInloopTabel:
     
     def __init__(self, bgt_inlooptabel_fn):
-    
+        
         tabel_abspath = os.path.abspath(bgt_inlooptabel_fn)
         if not os.path.isfile(tabel_abspath):
             raise FileNotFoundError(
@@ -80,6 +80,8 @@ class BGTInloopTabel:
                 raise ValueError("Required field '{}' not in BGT inlooptabel".format(field))
             
         self.set_table()
+        # Log in the table instance which surfaces have already been coupled to a pipe
+        self.connected_surfaces = []
             
     def get_layer_fields(self):
         """Sets the layers fields"""
@@ -106,17 +108,25 @@ class BGTInloopTabel:
                     self._table['surface_area'].append(feature_geometry.GetArea())
 
     def get_surface_area_for_pipe_id(self, pipe_id, pipe_type):
-        """get the connected surface area for a pipe id"""
+        """
+        get the connected surface area for a pipe id
+         determine all connected upstream pipes as well
+        """
 
         pipe_type_codes = self._table['pipe_code_' + pipe_type]
         
         surface_areas = []
         for i, code in enumerate(pipe_type_codes):
             if code == pipe_id:
-                surface_area_bgt = self._table['surface_area'][i]
-                surface_fraction = self._table[pipe_type][i] / 100
-                connected_area = surface_area_bgt * surface_fraction
-                surface_areas.append(connected_area)
+                bgt_identificatie = self._table['bgt_identificatie'][i]
+                
+                if bgt_identificatie not in self.connected_surfaces:           
+                    surface_area_bgt = self._table['surface_area'][i]
+                    surface_fraction = self._table[pipe_type][i] / 100
+                    connected_area = surface_area_bgt * surface_fraction
+                    
+                    surface_areas.append(connected_area)
+                    self.connected_surfaces.append(bgt_identificatie)
         
         surface_sum = sum(surface_areas)
         
@@ -126,9 +136,7 @@ class BGTInloopTabel:
 class Pipe:
 
     def __init__(self, feature):
-        
-        #TODO If feature is not a linestring with two points raise error
-        
+                
         # Export properties to json and add to class properties
         property_json = json.loads(feature.ExportToJson())['properties']
         
@@ -173,13 +181,16 @@ class Pipe:
         
     def calculate_discharge(self, design_rain):   
         
+        #TODO tijdstap omrekeken
+        #TODO netwerkanalyse discharge
+        
         if design_rain in AREA_WIDE_RAIN.keys():
             design_rain_pattern = AREA_WIDE_RAIN[design_rain]
         else:
             raise KeyError('Selected design rain not availabe')
             
         max_intensity = max(design_rain_pattern)
-        pipe_discharge = self.connected_surface_area * (max_intensity / 1000)
+        pipe_discharge = self.connected_surface_area * ((max_intensity / 1000) / DESIGN_RAIN_TIMESTEP)
         self.discharge = pipe_discharge
         
     def calculate_diameter(self):
@@ -194,10 +205,8 @@ class Pipe:
         estimated_diameter = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter        
     
-    
     def calculate_cover_depth(self):
         pass
-        
     
     def validate_feature(self, feature):        
         if len(self.points) != 2:
@@ -227,6 +236,7 @@ class PipeNetwork:
     
     def __init__(self):
         self.network = nx.DiGraph()
+        self.sewerage_type = None
         self.pipes = {}
     
     def add_pipe(self, pipe : Pipe):
@@ -234,13 +244,17 @@ class PipeNetwork:
         # Add pipe to the networkx DiGraph
         # Also save pipes to dictionary
         self.pipes[pipe.id] = pipe
-        self.network.add_node(pipe.start_coordinate, type='manhole')
-        self.network.add_node(pipe.end_coordinate, type='manhole')
+        
+        if pipe.start_coordinate not in self.network.nodes:
+            self.network.add_node(pipe.start_coordinate, type='manhole')
+        
+        if pipe.end_coordinate not in self.network.nodes:
+            self.network.add_node(pipe.end_coordinate, type='manhole')
+
         self.network.add_edge(pipe.start_coordinate, 
                               pipe.end_coordinate, 
                               id = pipe.id,
-                              length = pipe.geometry.Length())
-
+                              length = pipe.geometry.Length())        
     
     def calculate_max_hydraulic_gradient(self, outlet_node):
             
@@ -250,21 +264,48 @@ class PipeNetwork:
          and the furthest node divided by the distance between the two
          Assign this back to all the pipes in the network
         """
-
-        self.reverse_network = self.network.reverse()
+        
+        #TODO opgeven minimale waking
+        #TODO waking over gehele trace berekenen
+        #TODO aanpassen hydraulische gradient op basis van evaluatie
         distance_matrix = dict(nx.all_pairs_dijkstra(self.reverse_network, weight='length'))
                 
         # Get the distance dictionary for the end node 
         distance_dictionary = distance_matrix[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
-        furthest_edge = it_sewerage.network.edges(furthest_node, data=True)        
+        furthest_edge = self.network.edges(furthest_node, data=True)        
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
         
         max_hydraulic_gradient = furthest_pipe.start_elevation / distance
             
         for pipe in self.pipes:
             setattr(self.pipes[pipe], 'max_hydraulic_gradient',  max_hydraulic_gradient)
-
+            
+    def determine_connected_surface_area_totals(self, bgt_inlooptabel : BGTInloopTabel):
+        
+        pipe_connected_surface = {}
+        for pipe_id, pipe in self.pipes.items():
+            connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_id = str(pipe.id), pipe_type = self.sewerage_type)
+            pipe_connected_surface[pipe.id] = connected_surface_area
+            
+        for edge in self.network.edges(data=True):
+            pipe = self.get_pipe_with_edge(edge) 
+            
+            if getattr(pipe, 'connected_surface_area') is None:
+                start_node = edge[0]
+                upstream_nodes = [n for n in nx.traversal.bfs_tree(self.network, start_node , reverse=True) if n != start_node]
+                upstream_pipes = set()
+                upstream_pipes.add(pipe.id)
+                for i, node in enumerate(upstream_nodes):
+                    if i == len(upstream_nodes) - 1:
+                        break
+                    upstream_edge = (node, upstream_nodes[i+1])
+                    upstream_pipe = self.get_pipe_with_edge(upstream_edge)   
+                    upstream_pipes.add(upstream_pipe.id)
+                
+                pipe_total_connected_surface = sum([pipe_connected_surface[pipe_id] for pipe_id in upstream_pipes])
+                setattr(pipe, 'connected_surface_area', pipe_total_connected_surface)
+            
     def add_id_to_nodes(self):
         for i, node in enumerate(self.network.nodes):
             self.network.nodes[node]['id'] = i
@@ -274,20 +315,23 @@ class PipeNetwork:
         edge_id = edge_data['id']    
         pipe = self.pipes[edge_id]
         return pipe
-
     
     def validate_network(self):
-        # Check for outlets connection, all pipes connected, at least one outlet
+        #TODO Check for outlets connection, all pipes connected, at least one outlet
         pass
     
     def generate_output_layer(self):
         pass
     
+    @property
+    def reverse_network(self):
+        return self.network.reverse()
+    
         
 class ITPipeNetwork(PipeNetwork):
     
     def __init__(self):
-        pass
+        self.network_type = 'infiltratieriool'
 
     def add_weir(weir: Weir):
         pass
@@ -296,7 +340,7 @@ class ITPipeNetwork(PipeNetwork):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
         pass
     
-    def estimate_stuwput_locations(self, dem_path):
+    def estimate_internal_weir_locations(self):
         # For a given network and elevation model, determine the best locations to install weirs
         # If there are already weirs in the network, raise error
         pass
@@ -326,74 +370,6 @@ class SewerageDesigner:
     def __init__(self):
         pass
         
-    
-if __name__ == '__main__':
-    
-    # Generate a pipe network from a tracing
-    # Tracing will be geopackage containing the following layers: pipes, outlets, weirs, pumpstations
-    # Settings from QGIS gui will be :
-        # Sewerage type (IT)
-        # BGT Inlooptabel from a ogr datasource
-        
-    #TODO Check network for amount of outlets
-    #TODO Check tracing for correct projection
-        
-    test_tracing = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\zundert_test_28992.gpkg'
-    dem_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\Zundert.tif'
-    bgt_inlooptabel = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\bgt_inlooptabel.gpkg'
-    network_type = 'gemengd_riool'
-    design_rain = '9'
-    test_tracing_ds = ogr.Open(test_tracing)
-    
-    # Load BGT Inlooptabel
-    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel)
-    
-    # Load DEM rasterband and geotransform
-    dem_ds = gdal.Open(dem_fn)
-    dem_rb = dem_ds.GetRasterBand(1)
-    gt = dem_ds.GetGeoTransform()
-
-    # Get pipes 
-    pipes = test_tracing_ds.GetLayer('pipe')
-    outlets = test_tracing_ds.GetLayer('outlet')
-    
-    # Define a new pipe network
-    it_sewerage = PipeNetwork()
-    
-    # Add some pipes
-    for feature in pipes:
-        pipe = Pipe(feature)
-        # Determine the connected surface area using the BGT inlooptabel
-        pipe.connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_id = str(pipe.id), pipe_type = network_type)
-        pipe.calculate_elevation(elevation_rasterband=dem_rb, gt=gt)            
-
-        # Add the pipe to the network        
-        it_sewerage.add_pipe(pipe)        
-
-
-    it_sewerage.add_id_to_nodes()
-
-    # Add some outlets
-    for feature in outlets:
-        outlet = Outlet(feature)
-        if outlet.coordinate in it_sewerage.network.nodes(data=True):
-            attr = {outlet.coordinate : {'type': 'outlet'}}
-            nx.set_node_attributes(it_sewerage.network, attr)
-        else:
-            raise KeyError('Outlet coordinate is not a node in the network')
-    
-    # Get the surface area 
-    
-    # Calculate max hydraulic gradient possible for the network
-    it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate)
-    
-    # Calculate the capacity for all the pipes 
-    for pipe_id, pipe in it_sewerage.pipes.items():
-        # Use Colebrook-White to estimate a diameter
-        pipe.calculate_discharge(design_rain=design_rain)
-        pipe.calculate_diameter()
-
-
     
      
     

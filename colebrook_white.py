@@ -41,8 +41,9 @@ class ColebrookWhite:
         self.Smax=Smax          #max hydraulic gradient [-]
         
         # Define initial diameter
-        self.D_precise = self.calculate_diameter()
+        self.D_precise = self.calculate_diameter()        
         self.D_design = self.find_closest_diameter(self.D_precise)
+        
         
     def calculate_diameter(self):
         D=2*math.sqrt((math.pi*self.q)/self.vmax)        
@@ -77,7 +78,7 @@ class ColebrookWhite:
     def iterate_diameters(self):
         Scalc = self.colebrook_white()
         
-        while Scalc > self.Smax or self.D_design == D_OPTIONS[-1]:
+        while Scalc > self.Smax or self.D_design != D_OPTIONS[-1]:
             self.increase_diameter()
             self.v_max = self.calc_vmax()
             Scalc = self.colebrook_white()
