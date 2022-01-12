@@ -18,6 +18,7 @@ if __name__ == '__main__':
         
     #TODO Check network for amount of outlets
     #TODO Check tracing for correct projection
+    #TODO hoofdroutes kunnen aangeven in het trace/ of niet wenselijke routes duurder maken in trace voor netwerkanalyse
     #TODO opnkippen stelsel o.b.v stuwputten, optellen debieten
     #TODO checken diameters opeenvolgende buizen, ook bij stuwputten nooit kleiner
     #TODO Stuwputten bepalen voor stelsels met uitlaten, indicatie voor uitlaat stelsel zonder stuwputten
