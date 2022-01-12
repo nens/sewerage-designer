@@ -25,6 +25,8 @@ if __name__ == '__main__':
     #TODO NWRW model factors implementeren voor bgt inlooptabel,. vermenigvulden percentage verharding
     #TODO Niet dubbel oppervlak tellen bij aangesloten oppervlak
     #TODO DOwnload empty geopackge from GUI
+    #TODO Dekking checken, diepteligging wordt bepaald door de drempelhoogte
+    #TODO Colebrook-white beschikbare diameters variabel maken
         
     test_tracing = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\zundert_test_28992.gpkg'
     dem_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\test_data\Zundert.tif'
