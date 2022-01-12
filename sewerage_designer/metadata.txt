@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=SewerageDesigner
-qgisMinimumVersion=3.0
-description=SewerageDesigner
+name=Sewerage Designer
+qgisMinimumVersion=3.16
+description=Design sewer systems 
 version=0.1
-author=Emile de Badts
-email=emile.debadts@nelen-schuurmans.nl
+author=Nelen & Schuurmans
+email=info@nelen-schuurmans.nl
 
-about=-
+about=Design sewer systems
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/nens/sewerage-designer/issues
+repository=https://github.com/nens/sewerage-designer
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,13 +23,13 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=python
+tags=sewerage, design
 
-homepage=http://homepage
+homepage=https://www.nelen-schuurmans.nl
 category=Plugins
 icon=icon.png
 # experimental flag
-experimental=False
+experimental=True
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
