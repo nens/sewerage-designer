@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>386</width>
+    <width>383</width>
     <height>903</height>
    </rect>
   </property>
@@ -37,7 +37,7 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>364</width>
+         <width>361</width>
          <height>855</height>
         </rect>
        </property>
@@ -53,13 +53,13 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>210</height>
+            <height>240</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>210</height>
+            <height>240</height>
            </size>
           </property>
           <property name="title">
@@ -136,13 +136,13 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>70</height>
+            <height>100</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>70</height>
+            <height>100</height>
            </size>
           </property>
           <property name="toolTip">
@@ -169,13 +169,13 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>135</height>
+            <height>160</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>135</height>
+            <height>160</height>
            </size>
           </property>
           <property name="title">
@@ -279,13 +279,13 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>70</height>
+            <height>80</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>70</height>
+            <height>80</height>
            </size>
           </property>
           <property name="title">

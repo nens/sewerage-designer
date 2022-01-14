@@ -23,28 +23,133 @@
 """
 
 import os
-
+import sys
+sys.path.append(os.path.dirname(__file__))
+from constants import *
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
+from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'sewerage_designer_dockwidget_base.ui'))
+FORM_CLASS,_=uic.loadUiType(os.path.join(
+    os.path.dirname(__file__),'sewerage_designer_dockwidget_base.ui'))
 
-
-class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
-
-    closingPlugin = pyqtSignal()
-
-    def __init__(self, parent=None):
+GEOPACKAGE=os.path.join(os.path.dirname(__file__),'geopackage','empty_test.gpkg')
+	
+class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
+    closingPlugin=pyqtSignal()
+    
+    def __init__(self,parent=None):
         """Constructor."""
-        super(SewerageDesignerDockWidget, self).__init__(parent)
+        super(SewerageDesignerDockWidget,self).__init__(parent)
         # Set up the user interface from Designer.
         # After setupUI you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see
         # http://doc.qt.io/qt-5/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+        self.mQgsFileWidget_PathEmptyGeopackage.setStorageMode(3) #set to save mode
+        self.mQgsFileWidget_PathEmptyGeopackage.setFilter('*.gpkg')
+        self.pushButton_CreateNewGeopackage.clicked.connect(self.pushbutton_create_new_geopackage_isChecked)
+        self.mQgsFileWidget_PathGeopackage.setFilter('*.gpkg')
+        self.pushButton_LoadGeopackage.clicked.connect(self.pushbutton_load_geopackage_isChecked)
+        self.mMapLayerComboBox_DEM.setShowCrs(True)
+        self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.mMapLayerComboBox_CS.setShowCrs(True)
+        self.mMapLayerComboBox_CS.setFilters(QgsMapLayerProxyModel.VectorLayer)
+        self.pushButton_ComputeCS.clicked.connect(self.pushbutton_computeCS_isChecked)
+        for key in AREA_WIDE_RAIN:
+            self.comboBox_DesignRain.addItem(key)
+        self.lineEdit_PeakIntensity.setText(str(max(AREA_WIDE_RAIN[list(AREA_WIDE_RAIN.keys())[0]]))) #initialise intensity with first event
+        self.comboBox_DesignRain.currentTextChanged.connect(self.write_peak_intensity) #change intensity if users changes design event
+        self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)        
+        self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
+    
+    def add_layer_to_map(self,path):       
+        gpkg_layer=path+"|layername=empty_test"
+        vlayer=QgsVectorLayer(gpkg_layer,"empty_test","ogr")
+        if not vlayer.isValid():
+            print("Layer failed to load!")
+        else:
+            QgsProject.instance().addMapLayer(vlayer)
+	
+    def get_geopackage_save_path(self):
+        path=self.mQgsFileWidget_PathEmptyGeopackage.filePath()
+        if not path.endswith('.gpkg'):
+            path=path+'.gpkg'
+        return path
 
-    def closeEvent(self, event):
+    def get_geopackage_load_path(self):
+        path=self.mQgsFileWidget_PathGeopackage.filePath()
+        return path
+    
+    def get_DEM(self):
+        path=self.mMapLayerComboBox_DEM.currentLayer().source()
+        return path
+    
+    def get_BGT_inlooptabel(self):
+        self.BGT_inlooptabel=self.mMapLayerComboBox_CS.currentLayer().source()
+        
+    def get_peak_intensity_design_event(self,AREA_WIDE_RAIN):
+        event=self.comboBox_DesignRain.currentText()
+        peak_intensity=max(AREA_WIDE_RAIN[event])
+        return peak_intensity
+    
+    def write_peak_intensity(self):
+        peak_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        self.lineEdit_PeakIntensity.setText(str(peak_intensity))
+        
+    def get_final_peak_intensity_from_lineedit(self):
+        final_peak_intensity=float(self.lineEdit_PeakIntensity.text())
+        return final_peak_intensity
+        #final intensity can be changed by user from standard maximum corresponding to design event
+          
+    def copy(self,source,dest):
+    	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
+
+    def compute_CS(self,BGT_inlooptabel):
+        #TODO
+        pass
+    
+    def check_input(self):
+        response=QtWidgets.QMessageBox.Yes #by definition if not changed
+        intensity=self.get_final_peak_intensity_from_lineedit()
+        check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        if not intensity==check_intensity:
+            response=QtWidgets.QMessageBox.question(self,'Warning',('Peak intensity 'f"{intensity}"' mm/5min '
+                                                        'does not match the peak intensity of the '
+                                                        'design event. Want to continue?'),
+                                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                                                    QtWidgets.QMessageBox.Cancel)
+        return response
+
+    def compute_diameters(self):
+        #TODO
+        QtWidgets.QMessageBox.about(self,"Check","Check: nu gaan we rekenen")
+
+    def compute_depths(self):
+        #TODO
+        pass
+    		   	
+    def pushbutton_create_new_geopackage_isChecked(self):
+        dest=self.get_geopackage_save_path()
+        self.copy(GEOPACKAGE,dest)
+        self.add_layer_to_map(dest)
+        
+    def pushbutton_load_geopackage_isChecked(self):
+        gpkg=self.get_geopackage_load_path()
+        self.add_layer_to_map(gpkg)
+           
+    def pushbutton_computeCS_isChecked(self):
+        self.compute_CS(self.BGT_inlooptabel)
+        
+    def pushbutton_computeDiameters_isChecked(self):
+        response=self.check_input()
+        if response==QtWidgets.QMessageBox.Yes:
+            self.compute_diameters()
+        
+    def pushbutton_computeDepths_isChecked(self):
+        self.compute_depths()
+    
+    def closeEvent(self,event):
         self.closingPlugin.emit()
         event.accept()
