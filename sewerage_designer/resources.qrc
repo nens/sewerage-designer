@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/plugins/sewerage_designer" >
         <file>icon.png</file>
+		<file>icon_teal.png</file>
     </qresource>
 </RCC>
