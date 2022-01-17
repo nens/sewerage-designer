@@ -33,7 +33,7 @@ from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyM
 FORM_CLASS,_=uic.loadUiType(os.path.join(
     os.path.dirname(__file__),'sewerage_designer_dockwidget_base.ui'))
 
-GEOPACKAGE=os.path.join(os.path.dirname(__file__),'geopackage','empty_test.gpkg')
+GEOPACKAGE=os.path.join(os.path.dirname(__file__),'geopackage','sewerage.gpkg')
 	
 class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     closingPlugin=pyqtSignal()
@@ -63,14 +63,19 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.comboBox_DesignRain.currentTextChanged.connect(self.write_peak_intensity) #change intensity if users changes design event
         self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)        
         self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
+
+    def add_group(self,group_name):
+        group=QgsProject.instance().layerTreeRoot().addGroup(group_name) 
+        return group
     
-    def add_layer_to_map(self,path):       
-        gpkg_layer=path+"|layername=empty_test"
-        vlayer=QgsVectorLayer(gpkg_layer,"empty_test","ogr")
+    def add_layer_to_group(self,path,layername,group):       
+        gpkg_layer=path+'|layername='f"{layername}"
+        vlayer=QgsVectorLayer(gpkg_layer,layername,"ogr")
         if not vlayer.isValid():
             print("Layer failed to load!")
         else:
-            QgsProject.instance().addMapLayer(vlayer)
+            QgsProject.instance().addMapLayer(vlayer,False)
+            group.addLayer(vlayer)
 	
     def get_geopackage_save_path(self):
         path=self.mQgsFileWidget_PathEmptyGeopackage.filePath()
@@ -133,11 +138,19 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def pushbutton_create_new_geopackage_isChecked(self):
         dest=self.get_geopackage_save_path()
         self.copy(GEOPACKAGE,dest)
-        self.add_layer_to_map(dest)
+        layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
+        group_name='Sewerage Designer'
+        group=self.add_group(group_name) 
+        for layername in layernames:
+            self.add_layer_to_group(dest,layername,group)
         
     def pushbutton_load_geopackage_isChecked(self):
         gpkg=self.get_geopackage_load_path()
-        self.add_layer_to_map(gpkg)
+        layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
+        group_name='Sewerage Designer'
+        group=self.add_group(group_name) 
+        for layername in layernames:
+            self.add_layer_to_group(gpkg,layername,group)
            
     def pushbutton_computeCS_isChecked(self):
         self.compute_CS(self.BGT_inlooptabel)
