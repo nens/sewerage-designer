@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(__file__))
 from constants import *
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
-from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel
+from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsMapLayerProxyModel
 
 FORM_CLASS,_=uic.loadUiType(os.path.join(
     os.path.dirname(__file__),'sewerage_designer_dockwidget_base.ui'))

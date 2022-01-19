@@ -17,3 +17,9 @@ AREA_WIDE_RAIN = {
     # "15": [0.225694444] * 48,
     # "16": [0.277777778] * 48,
 }
+
+INFILTRATIEVOORZIENING = 'infiltratievoorziening'
+GEMENGD_RIOOL = 'gemengd riool'
+VUILWATERRIOOL = 'vuilwaterriool'
+HEMELWATERRIOOL = 'hemelwaterriool'
+VGS_HEMELWATERRIOOL = 'vgs hemelwaterriool'

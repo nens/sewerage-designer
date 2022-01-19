@@ -4,7 +4,7 @@ Created on Wed Dec  8 14:49:31 2021
 
 @author: Emile.deBadts
 """
-
+# TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
 import os
 
 from osgeo import gdal, ogr
@@ -163,32 +163,83 @@ class BGTInloopTabel:
 
 class Pipe:
 
-    def __init__(self, feature):
+    def __init__(
+            self,
+            parent,
+            wkb_geometry,
+            diameter: float = None,
+            start_level: float = None,
+            end_level: float = None,
+            material: str = None,
+            connected_surface_area: float = None,
+            sewerage_type: str = None,
+            cover_depth: float = None,
+            discharge: float = None,
+            velocity: float = None
+    ):
+        if isinstance(parent, PipeNetwork):
+            self.parent = parent
+        else:
+            raise TypeError('parent is not a PipeNetwork')
+        self.geometry = ogr.CreateGeometryFromWkb(wkb_geometry)
+        self.diameter = diameter
+        self.start_level = start_level
+        self.end_level = end_level
+        self.material = material
+        self.connected_surface_area = connected_surface_area
+        self.sewerage_type = sewerage_type
+        self.cover_depth = cover_depth
+        self.discharge = discharge
+        self.velocity = velocity
 
-        # Export properties to json and add to class properties
-        self.properties = json.loads(feature.ExportToJson())["properties"]
-        self.feature = feature
+        self.start_elevation = None
+        self.end_elevation = None
+        self.lowest_elevation = None
 
-        for key, value in self.properties.items():
-            setattr(self, key, value)
-        
-        self.validate_feature(feature)
-        
+        self.validate()
 
-    def calculate_elevation(self, elevation_rasterband, gt):
-        dem_no_data_value = elevation_rasterband.GetNoDataValue()
+    @property
+    def wkt_geometry(self):
+        return self.geometry.ExportToWkt()
+
+    @property
+    def points(self):
+        return self.geometry.GetPoints()
+
+    @property
+    def start_coordinate(self):
+        return self.points[0]
+
+    @property
+    def end_coordinate(self):
+        return self.points[1]
+
+    @property
+    def dem_datasource(self):
+        return self.parent.dem_datasource
+
+    @property
+    def dem_rasterband(self):
+        return self.parent.dem_rasterband
+
+    @property
+    def dem_geotransform(self):
+        return self.parent.dem_geotransform
+
+    def calculate_elevation(self):
+        dem_no_data_value = self.dem_rasterband.GetNoDataValue()
 
         pipe_source_coordinates = self.start_coordinate
         pipe_target_coordinates = self.end_coordinate
 
+        gt = self.dem_geotransform
         p_source_x = int((pipe_source_coordinates[0] - gt[0]) / gt[1])  # x pixel
         p_source_y = int((pipe_source_coordinates[1] - gt[3]) / gt[5])  # y pixel
         p_target_x = int((pipe_target_coordinates[0] - gt[0]) / gt[1])  # x pixel
         p_target_y = int((pipe_target_coordinates[1] - gt[3]) / gt[5])  # y pixel
 
         # sample dem for intermediate points
-        points = []
-        points.append([p_source_x, p_source_y])
+        points = [[p_source_x, p_source_y]]
 
         for point in get_intermediates(
             [p_source_x, p_source_y], [p_target_x, p_target_y], LINE_SAMPLE_POINTS
@@ -198,11 +249,14 @@ class Pipe:
 
         dem_elevation = []
         for point in points:
-            elevation = elevation_rasterband.ReadAsArray(point[0], point[1], 1, 1)[0][0]
+            elevation = self.dem_rasterband.ReadAsArray(point[0], point[1], 1, 1)[0][0]
             if elevation == dem_no_data_value:
                 elevation = None
             dem_elevation.append(elevation)
 
+        # TODO @Emile wouldn't it make more sense to mek dem_elevation a hidden attribute (self._dem_elevation) and
+        # start_elevation, end_elevation and lowest_elevation read-only properties (@property)?
+        # this would also allow us to calculate _dem_elevation if it is None when start_elevation etc. are requested
         self.start_elevation = dem_elevation[0]
         self.end_elevation = dem_elevation[-1]
         self.lowest_elevation = min(dem_elevation)
@@ -253,7 +307,7 @@ class Pipe:
         )
         self.minimum_cover_depth = minimum_cover_depth
 
-    def validate_feature(self, feature):
+    def validate(self):
         if len(self.points) != 2:
             raise InvalidGeometryException
 
@@ -262,34 +316,28 @@ class Pipe:
             value = getattr(self, key)
             self.feature.SetField(key, value)
     
-    @property
-    def geometry(self):
-        return self.feature.GetGeometryRef()
 
-    @property
-    def wkt_geometry(self):
-        return self.geometry.ExportToWkt()
-
-    @property
-    def points(self):
-        return self.geometry.GetPoints()
-
-    @property
-    def start_coordinate(self):
-        return self.points[0]
-
-    @property
-    def end_coordinate(self):
-        return self.points[1]
-    
 
 
 class PipeNetwork:
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self.network = nx.DiGraph()
         self.sewerage_type = None
         self.outlet_level = None
         self.pipes = {}
+
+    @property
+    def dem_datasource(self):
+        return self.parent.dem_datasource
+
+    @property
+    def dem_rasterband(self):
+        return self.parent.dem_rasterband
+
+    @property
+    def dem_geotransform(self):
+        return self.parent.dem_geotransform
 
     def add_pipe(self, pipe: Pipe):
 
@@ -400,10 +448,10 @@ class PipeNetwork:
         return self.network.reverse()
 
 
-class ITPipeNetwork(PipeNetwork):
-    
-    def __init__(self):
-        super().__init__()
+class StormWaterPipeNetwork(PipeNetwork):
+    # TODO maybe rename to StormWaterPipeNetwork
+    def __init__(self, parent):
+        super().__init__(parent)
         self.network_type = "infiltratieriool"
 
     def calculate_required_cover_depth(self):
@@ -427,10 +475,7 @@ class ITPipeNetwork(PipeNetwork):
         pass
 
 
-class MixedPipeNetwork(PipeNetwork):
-    def __init__(self):
-        pass
-
+class WasteWaterPipeNetwork(PipeNetwork):
     def calculate_required_cover_depth(self):
         pass
 
@@ -448,4 +493,16 @@ class SewerageDesignSettings:
 
 class SewerageDesigner:
     def __init__(self):
-        pass
+        self.dem_datasource = None
+        self.dem_rasterband = None
+        self.dem_geotransform = None
+        self.bgt_inlooptabel = None
+        self.pipe_networks = []
+
+    def set_dem(self, filename):
+        self.dem_datasource = gdal.Open(filename)
+        self.dem_rasterband = self.dem_datasource.GetRasterBand(1)
+        self.dem_geotransform = self.dem_datasource.GetGeoTransform()
+
+    def set_bgt_inlooptabel(self, filename):
+        self.bgt_inlooptabel = BGTInloopTabel(filename)
