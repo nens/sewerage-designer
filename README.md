@@ -4,5 +4,5 @@ QGIS plugin for designing stormwater sewerage systems.
 
 ## Testing
 
-cd ../sewerage-designer
-python -m pytest
+- cd ../sewerage-designer
+- python -m pytest
