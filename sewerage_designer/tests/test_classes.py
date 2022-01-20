@@ -51,7 +51,36 @@ def test_add_weir():
     assert len(stormwaternetwork.weirs) == 1
     assert len(stormwaternetwork.network.nodes) == 1
     
+def test_bgt_inlooptabel():
+    """Get surface area for pipe id's"""
+    bgt_inlooptabel_file = TEST_DIRECTORY  / 'bgt_inlooptabel_test.gpkg'
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
+    surface_area_6 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 6, pipe_type='infiltratievoorziening')
+    surface_area_7 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 7, pipe_type='infiltratievoorziening')
+    surface_area_8 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 8, pipe_type='infiltratievoorziening')
+
+    assert pytest.approx(surface_area_6) == 65.6751
+    assert pytest.approx(surface_area_7) == 53.90597
+    assert pytest.approx(surface_area_8) == 114.7000
     
+def test_network_connected_surface_area():
+    """Test aggregated surface areas along the network"""
+    
+    pipes = ['LINESTRING (0 0, 1 0)',
+             'LINESTRING (1 0, 2 0)',
+             'LINESTRING (2 0, 3 0)']    
+    
+    stormwaternetwork = StormWaterPipeNetwork()
+    for i, feature in enumerate(pipes):
+        pipe = Pipe(feature, i)
+        pipe.connected_surface_area = 1
+        stormwaternetwork.add_pipe(pipe)        
+    stormwaternetwork.accumulate_connected_surface_area()
+    
+    assert stormwaternetwork.pipes[0].accumulated_connected_surface_area == 1
+    assert stormwaternetwork.pipes[1].accumulated_connected_surface_area == 2
+    assert stormwaternetwork.pipes[2].accumulated_connected_surface_area == 3    
+
 def test_calculate_elevation():
     pass
 

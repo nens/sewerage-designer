@@ -33,6 +33,7 @@ if __name__ == '__main__':
     design_rain = 'Bui10'
     waking = 0
     dem = './tests/test_data/Zundert.tif'
+    bgt_inlooptabel_file = './tests/test_data/bgt_inlooptabel_test.gpkg'
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
@@ -43,6 +44,8 @@ if __name__ == '__main__':
     sd.set_dem(dem_fn)
 
     # Load BGT Inlooptabel
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
+    bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code=8, pipe_type='infiltratievoorziening')
     sd.set_bgt_inlooptabel(bgt_inlooptabel_fn)
 
     # Define a new pipe network
@@ -57,26 +60,23 @@ if __name__ == '__main__':
     # Add some pipes
     for i, feature in enumerate(pipes):
         pipe = Pipe(feature, i)
+        pipe.connected_surface_area = 1
         pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
         stormwater_network.add_pipe(pipe)
 
     stormwater_network.add_id_to_nodes()
     
-    # Add an outlet weir
+    # Add an weir
     weir = Weir(weirs[0], 1)
     stormwater_network.add_weir(weir)
 
-    # Add some outlets
-    for feature in outlets:
-        outlet = Outlet(feature)
-        if outlet.coordinate in it_pipe_network.network.nodes(data=True):
-            attr = {outlet.coordinate : {'type': 'outlet'}}
-            nx.set_node_attributes(it_sewerage.network, attr)
-        else:
-            raise KeyError('Outlet coordinate is not a node in the network')
+    # For all 
 
     # Determine connected surface areas and the max hydraulic gradient for the whole network
-    it_sewerage.determine_connected_surface_area_totals(bgt_inlooptabel = bgt_inlooptabel)
+    stormwater_network.accumulate_connected_surface_area()
+    
+    stormwater_network.pipes[2].accumulated_connected_surface_area
+    
     it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate, waking=waking)
 
     # Calculate the capacity for all the pipes

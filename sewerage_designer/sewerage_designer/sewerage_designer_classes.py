@@ -93,7 +93,7 @@ class BGTInloopTabel:
         return fields
 
     def set_table(self):
-        """sets the table if not exists"""
+        """Sets the table if not exists"""
         if not hasattr(self, "_table"):
             self.table_fields = self.fields + ["fid", "surface_area"]
             self._table = {field: [] for field in self.table_fields}
@@ -103,23 +103,19 @@ class BGTInloopTabel:
                 feature_geometry = feature.GetGeometryRef()
                 for key, value in feature_items.items():
                     self._table[key].append(value)
-                    self._table["fid"].append(feature.GetFID())
-                    self._table["surface_area"].append(feature_geometry.GetArea())
+                self._table["fid"].append(feature.GetFID())
+                self._table["surface_area"].append(feature_geometry.GetArea())
 
-    def get_surface_area_for_pipe_id(self, pipe_id, pipe_type):
-        """
-        get the connected surface area for a pipe id
-         determine all connected upstream pipes as well
-        """
-
+    def get_surface_area_for_pipe_id(self, pipe_code, pipe_type):
+        """Get the connected surface area for a pipe code and which type of sewerage system should be searched"""
         pipe_type_codes = self._table["pipe_code_" + pipe_type]
-
         surface_areas = []
         for i, code in enumerate(pipe_type_codes):
-            if code == pipe_id:
+            if str(code) == str(pipe_code):
                 bgt_identificatie = self._table["bgt_identificatie"][i]
 
                 if bgt_identificatie not in self.connected_surfaces:
+                    print(bgt_identificatie)
                     surface_area_bgt = self._table["surface_area"][i]
                     surface_fraction = self._table[pipe_type][i] / 100
                     connected_area = surface_area_bgt * surface_fraction
@@ -128,9 +124,7 @@ class BGTInloopTabel:
                     self.connected_surfaces.append(bgt_identificatie)
 
         surface_sum = sum(surface_areas)
-
         return surface_sum
-
 
 class Weir:
 
