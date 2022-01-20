@@ -5,8 +5,8 @@ from osgeo import gdal, ogr
 import networkx as nx
 import json
 
-from constants import *
-from sd import Pipe, Outlet, BGTInloopTabel, PipeNetwork, ITPipeNetwork, SewerageDesigner
+from sewerage_designer.constants import *
+from sewerage_designer.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
 
 if __name__ == '__main__':
 
@@ -28,16 +28,14 @@ if __name__ == '__main__':
     #TODO Dekking checken, diepteligging wordt bepaald door de drempelhoogte
     #TODO Colebrook-white beschikbare diameters variabel maken
 
-    test_tracing = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\tests\test_data\zundert_test_28992.gpkg'
-    dem_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\tests\test_data\Zundert.tif'
-    bgt_inlooptabel_fn = r'C:\Users\Emile.deBadts\Documents\repos\sewerage-designer\tests\test_data\bgt_inlooptabel.gpkg'
-
     # Settings
     network_type = 'infiltratieriool'
     design_rain = 'Bui10'
     waking = 0
-
-    test_tracing_ds = ogr.Open(test_tracing, 1)
+    dem = './tests/test_data/Zundert.tif'
+    dem_datasource = gdal.Open(dem)
+    dem_rasterband = dem_datasource.GetRasterBand(1)
+    dem_geotransform = dem_datasource.GetGeoTransform()
 
     sd = SewerageDesigner()
 
@@ -48,20 +46,25 @@ if __name__ == '__main__':
     sd.set_bgt_inlooptabel(bgt_inlooptabel_fn)
 
     # Define a new pipe network
-    it_pipe_network = ITPipeNetwork()
-    it_pipe_network.outlet_level = 6.0
+    stormwater_network = StormWaterPipeNetwork()
 
     # Get pipes
-    pipes = test_tracing_ds.GetLayer('pipe')
-    outlets = test_tracing_ds.GetLayer('outlet')
+    pipe_json = r'.\tests\test_data\pipes_simple_network.json'
+    weir_json = r'.\tests\test_data\weir_simple_network.json'
+    pipes = json.load(open(pipe_json, 'r'))
+    weirs = json.load(open(weir_json, 'r'))
 
     # Add some pipes
-    for feature in pipes:
-        pipe = Pipe(feature)
-        pipe.calculate_elevation(elevation_rasterband=dem_rb, gt=gt)
-        it_pipe_network.add_pipe(pipe)
+    for i, feature in enumerate(pipes):
+        pipe = Pipe(feature, i)
+        pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
+        stormwater_network.add_pipe(pipe)
 
-    it_pipe_network.add_id_to_nodes()
+    stormwater_network.add_id_to_nodes()
+    
+    # Add an outlet weir
+    weir = Weir(weirs[0], 1)
+    stormwater_network.add_weir(weir)
 
     # Add some outlets
     for feature in outlets:
