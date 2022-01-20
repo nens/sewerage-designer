@@ -48,7 +48,7 @@ def test_add_weir():
     weir = Weir(weirs[0], 1)
     stormwaternetwork.add_weir(weir)
     
-    assert len(stormwaternetwork.weirs) == 1
+    assert stormwaternetwork.weir is not None
     assert len(stormwaternetwork.network.nodes) == 1
     
 def test_bgt_inlooptabel():
@@ -81,8 +81,29 @@ def test_network_connected_surface_area():
     assert stormwaternetwork.pipes[1].accumulated_connected_surface_area == 2
     assert stormwaternetwork.pipes[2].accumulated_connected_surface_area == 3    
 
-def test_calculate_elevation():
-    pass
+def test_calculate_max_hydraulic_gradient():
+
+    pipes = ['LINESTRING (0 0, 1 0)',
+             'LINESTRING (1 0, 2 0)',
+             'LINESTRING (2 0, 3 0)']    
+        
+    stormwaternetwork = StormWaterPipeNetwork()
+    for i, feature in enumerate(pipes):
+        pipe = Pipe(feature, i)
+        pipe.start_elevation = 8
+        pipe.end_elevation = 8
+        stormwaternetwork.add_pipe(pipe)        
+
+    weir = 'POINT (3 0)'
+    weir = Weir(weir, 1)
+    weir.weir_level = 6
+    weir.freeboard = 0.5
+    stormwaternetwork.add_weir(weir)
+    
+    stormwaternetwork.calculate_max_hydraulic_gradient(outlet_node=weir.coordinate, waking=0)
+
+    theoretical_max_hydraulic_head = (8-6.5)/3
+    assert stormwaternetwork.pipes[0].max_hydraulic_gradient == theoretical_max_hydraulic_head
 
 def test_calculate_discharge():
     pass

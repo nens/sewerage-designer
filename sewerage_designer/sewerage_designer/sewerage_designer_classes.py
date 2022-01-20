@@ -338,7 +338,7 @@ class PipeNetwork:
         self.sewerage_type = None
         self.outlet_level = None
         self.pipes = {}
-        self.weirs = {}
+        self.weir = None
     
     @property
     def reverse_network(self):
@@ -346,9 +346,9 @@ class PipeNetwork:
         return self.network.reverse()
     
     @property
-    def distance_matrix(self):
+    def distance_matrix_reversed(self):
         """Returns a dictionary for each node a dictionary with distances to every other node"""
-        return dict(nx.all_pairs_dijkstra(self.network, weight="length"))
+        return dict(nx.all_pairs_dijkstra(self.reverse_network, weight="length"))
         
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
@@ -363,13 +363,13 @@ class PipeNetwork:
         self.network.add_edge(
             pipe.start_coordinate,
             pipe.end_coordinate,
-            id=pipe.fid,
+            fid=pipe.fid,
             length=pipe.geometry.Length(),
         )
     
     def add_weir(self, weir: Weir):
         """Add a weir to the network, as an object and as an edge to the graph"""
-        self.weirs[weir.fid] = weir
+        self.weir = weir
         
         # Add the node to the network, if the node is already present change it's type
         if weir.coordinate not in self.network.nodes:
@@ -390,18 +390,14 @@ class PipeNetwork:
         # TODO aanpassen hydraulische gradient op basis van evaluatie
         # Get the distance dictionary for the end node
         
-        distance_matrix = dict(
-            nx.all_pairs_dijkstra(self.reverse_network, weight="length")
-        )
-
         # Get the distance dictionary for the end node
-        distance_dictionary = distance_matrix[outlet_node][0]
+        distance_dictionary = self.distance_matrix_reversed[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
         furthest_edge = self.network.edges(furthest_node, data=True)
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
 
         max_hydraulic_gradient = (
-            (furthest_pipe.start_elevation + waking) - self.outlet_level
+            (furthest_pipe.start_elevation + waking) - self.network_upstream_hydraulic_head
         ) / distance
 
         for pipe in self.pipes:
@@ -431,8 +427,8 @@ class PipeNetwork:
             edge = self.network.edges(edge, data=True)
 
         edge_data = list(edge)[0][2]
-        edge_id = edge_data["id"]
-        pipe = self.pipes[edge_id]
+        edge_fid = edge_data["fid"]
+        pipe = self.pipes[edge_fid]
         return pipe
 
     def find_upstream_pipes(self, node):
@@ -461,6 +457,12 @@ class StormWaterPipeNetwork(PipeNetwork):
         super().__init__()
         self.network_type = "infiltratieriool"
 
+    @property
+    def network_upstream_hydraulic_head(self):
+        """Used to estimate the max hydraulic gradient"""        
+        if self.weir is not None:
+            return self.weir.freeboard + self.weir.weir_level
+    
     def calculate_required_cover_depth(self):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
         lowest_cover_depth_network = min(

@@ -68,16 +68,14 @@ if __name__ == '__main__':
     
     # Add an weir
     weir = Weir(weirs[0], 1)
+    weir.freeboard = 0.1
+    weir.weir_level = 6
     stormwater_network.add_weir(weir)
-
-    # For all 
-
+    #stormwater_network.network.nodes[weir.coordinate]
+    
     # Determine connected surface areas and the max hydraulic gradient for the whole network
     stormwater_network.accumulate_connected_surface_area()
-    
-    stormwater_network.pipes[2].accumulated_connected_surface_area
-    
-    it_sewerage.calculate_max_hydraulic_gradient(outlet.coordinate, waking=waking)
+    stormwater_network.calculate_max_hydraulic_gradient(weir.coordinate, waking=waking)
 
     # Calculate the capacity for all the pipes
     for pipe_id, pipe in it_pipe_network.pipes.items():
