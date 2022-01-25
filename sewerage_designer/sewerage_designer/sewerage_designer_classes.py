@@ -35,6 +35,7 @@ AREA_WIDE_RAIN = {
     # "16": [0.277777778] * 48,
 }
 
+
 DESIGN_RAIN_TIMESTEP = 300
 BGT_INLOOPTABEL_REQUIRED_FIELDS = [
     "bgt_identificatie",
@@ -126,20 +127,22 @@ class BGTInloopTabel:
         surface_sum = sum(surface_areas)
         return surface_sum
 
+
 class Weir:
 
     """Class representing external weir"""
-    
-    def __init__(self, 
-                 wkt_geometry,
-                 fid: int,
-                 weir_level: float = None,
-                 surface_elevation: float = None,
-                 freeboard: float = None,
-                 pipe_in_id: int = None,
-                 pipe_out_id: int = None,
-                 hydraulic_head: float = None
-                 ):
+
+    def __init__(
+        self,
+        wkt_geometry,
+        fid: int,
+        weir_level: float = None,
+        surface_elevation: float = None,
+        freeboard: float = None,
+        pipe_in_id: int = None,
+        pipe_out_id: int = None,
+        hydraulic_head: float = None,
+    ):
         self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.weir_level = weir_level
         self.fid = fid
@@ -148,7 +151,7 @@ class Weir:
         self.pipe_in_id = pipe_in_id
         self.pipe_out_id = pipe_out_id
         self.hydraulic_head = hydraulic_head
-        
+
     @property
     def wkt_geometry(self):
         return self.geometry.ExportToWkt()
@@ -159,17 +162,17 @@ class Weir:
 
 
 class Outlet:
-
-    def __init__(self, 
-                 wkb_geometry,
-                 ditch_level: float = None,
-                 outlet_id: int = None,
-                 surface_elevation: float = None,
-                 freeboard: float = None,
-                 pipe_in_id: int = None,
-                 pipe_out_id: int = None,
-                 hydraulic_head: float = None
-                 ):
+    def __init__(
+        self,
+        wkb_geometry,
+        ditch_level: float = None,
+        outlet_id: int = None,
+        surface_elevation: float = None,
+        freeboard: float = None,
+        pipe_in_id: int = None,
+        pipe_out_id: int = None,
+        hydraulic_head: float = None,
+    ):
         self.geometry = ogr.CreateGeometryFromWkb(wkb_geometry)
         self.ditch_level = ditch_level
         self.outlet_id = outlet_id
@@ -178,7 +181,7 @@ class Outlet:
         self.pipe_in_id = pipe_in_id
         self.pipe_out_id = pipe_out_id
         self.hydraulic_head = hydraulic_head
-        
+
     @property
     def wkt_geometry(self):
         return self.geometry.ExportToWkt()
@@ -193,25 +196,23 @@ class PumpingStation(ogr.Feature):
     # Outlets are also line geometry
     def __init__(self):
         self.end_level = None
-    
+
 
 class Pipe:
-
     def __init__(
-            self,
-            wkt_geometry,
-            fid : int = None,
-            diameter: float = None,
-            start_level: float = None,
-            end_level: float = None,
-            material: str = None,
-            connected_surface_area: float = None,
-            accumulated_connected_surface_area: float = None,
-            sewerage_type: str = None,
-            cover_depth: float = None,
-            discharge: float = None,
-            velocity: float = None,
-            
+        self,
+        wkt_geometry,
+        fid: int = None,
+        diameter: float = None,
+        start_level: float = None,
+        end_level: float = None,
+        material: str = None,
+        connected_surface_area: float = None,
+        accumulated_connected_surface_area: float = None,
+        sewerage_type: str = None,
+        cover_depth: float = None,
+        discharge: float = None,
+        velocity: float = None,
     ):
         self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.fid = fid
@@ -220,6 +221,7 @@ class Pipe:
         self.end_level = end_level
         self.material = material
         self.connected_surface_area = connected_surface_area
+        self.accumulated_connected_surface_area = accumulated_connected_surface_area
         self.sewerage_type = sewerage_type
         self.cover_depth = cover_depth
         self.discharge = discharge
@@ -246,15 +248,15 @@ class Pipe:
     @property
     def end_coordinate(self):
         return self.points[1]
-        
+
     def set_material(self):
         """Sets the material type based on the diameter"""
         if self.diameter is None:
             self.material = None
         elif self.diameter < 0.315:
-            self.material = 'PVC'
+            self.material = "PVC"
         else:
-            self.material = 'Concrete'
+            self.material = "Concrete"
 
     def sample_elevation_model(self, dem_rasterband, dem_geotransform):
         """Sample an elevation model on points along the pipe"""
@@ -288,9 +290,9 @@ class Pipe:
         self.start_elevation = dem_elevation[0]
         self.end_elevation = dem_elevation[-1]
         self.lowest_elevation = min(dem_elevation)
-        
-    def determine_connected_surface_area(self, bgt_inlooptabel : BGTInloopTabel):        
-        """Find the connected surface area from the BGT Inlooptabel, sewerage type is needed to filter"""        
+
+    def determine_connected_surface_area(self, bgt_inlooptabel: BGTInloopTabel):
+        """Find the connected surface area from the BGT Inlooptabel, sewerage type is needed to filter"""
         connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_id(
             pipe_id=str(self.id), pipe_type=self.sewerage_type
         )
@@ -298,10 +300,9 @@ class Pipe:
 
     def calculate_discharge(self, intensity, timestep):
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
-        
-        pipe_discharge = self.connected_surface_area * (
-            (intensity / 1000) / timestep
-        )        
+
+        # intensity is in mm/hr, timestep is in seconds
+        pipe_discharge = self.accumulated_connected_surface_area * ((intensity / 1000) / timestep)
         self.discharge = pipe_discharge
 
     def calculate_diameter(self):
@@ -315,7 +316,7 @@ class Pipe:
 
     def calculate_minimum_cover_depth(self, minimal_cover_depth):
         """Determine the depth """
-        
+
         material_thickness = MATERIAL_THICKNESS[self.material]
         minimum_cover_depth = self.lowest_elevation - (
             minimal_cover_depth + self.diameter + material_thickness
@@ -326,11 +327,20 @@ class Pipe:
         if len(self.points) != 2:
             raise InvalidGeometryException
 
-    def write_properties_to_feature(self):        
+    def write_properties_to_feature(self):
         for key in self.properties.keys():
             value = getattr(self, key)
             self.feature.SetField(key, value)
-                
+
+    def __str__(self):
+        output = ""
+        for _, var in vars(self).items():
+            output += str(_) + ": "
+            output += str(var)
+            output += "\n"
+
+        return output
+
 
 class PipeNetwork:
     def __init__(self):
@@ -339,17 +349,22 @@ class PipeNetwork:
         self.outlet_level = None
         self.pipes = {}
         self.weir = None
-    
+
     @property
     def reverse_network(self):
         """As we are using a DiGraph, this reverses the network direction"""
         return self.network.reverse()
-    
+
+    @property
+    def distance_matrix(self):
+        """Returns a dictionary for each node a dictionary with distances to every other node"""
+        return dict(nx.all_pairs_dijkstra(self.network, weight="length"))
+
     @property
     def distance_matrix_reversed(self):
         """Returns a dictionary for each node a dictionary with distances to every other node"""
         return dict(nx.all_pairs_dijkstra(self.reverse_network, weight="length"))
-        
+
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
         self.pipes[pipe.fid] = pipe
@@ -366,20 +381,20 @@ class PipeNetwork:
             fid=pipe.fid,
             length=pipe.geometry.Length(),
         )
-    
+
     def add_weir(self, weir: Weir):
         """Add a weir to the network, as an object and as an edge to the graph"""
         self.weir = weir
-        
+
         # Add the node to the network, if the node is already present change it's type
         if weir.coordinate not in self.network.nodes:
             self.network.add_node(weir.coordinate, type="weir")
         else:
-            attr = {weir.coordinate : {'type': 'weir'}}
+            attr = {weir.coordinate: {"type": "weir"}}
             nx.set_node_attributes(self.network, attr)
 
     def calculate_max_hydraulic_gradient(self, outlet_node, waking):
-        """ 
+        """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation
         The max hydraulic gradient is defined as the maximum difference in elevation between the endpoint of the network
         and the furthest node divided by the distance between the two
@@ -389,32 +404,107 @@ class PipeNetwork:
         # TODO waking over gehele trace berekenen
         # TODO aanpassen hydraulische gradient op basis van evaluatie
         # Get the distance dictionary for the end node
-        
+
         # Get the distance dictionary for the end node
         distance_dictionary = self.distance_matrix_reversed[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
-        furthest_edge = self.network.edges(furthest_node, data=True)
+        furthest_edge = list(self.network.edges(furthest_node))[0]
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
 
         max_hydraulic_gradient = (
-            (furthest_pipe.start_elevation + waking) - self.network_upstream_hydraulic_head
+            (furthest_pipe.start_elevation + waking)
+            - self.network_upstream_hydraulic_head
         ) / distance
 
         for pipe in self.pipes:
             setattr(self.pipes[pipe], "max_hydraulic_gradient", max_hydraulic_gradient)
 
+    def evaluate_hydraulic_gradient_upstream(self):
+        """Evaluate the maximum hydraulic gradient for each pipe in the network based on it's elevation"""
+        pass
+    
+
     def accumulate_connected_surface_area(self):
-        """For each pipe in the network, accumulate upstream connected area"""        
+        """For each pipe in the network, accumulate downstream connected area"""
+
         for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
-            start_node = edge[0]
-            upstream_pipes = self.find_upstream_pipes(start_node)
-            # Include also the current pipe, as its connected area should also be included in the total
-            upstream_pipes.append(pipe)
-            pipe_total_connected_surface = sum(
-                [pipe.connected_surface_area for pipe in upstream_pipes]
-            )
-            setattr(pipe, "accumulated_connected_surface_area", pipe_total_connected_surface)
+            edge_attrs = {edge: {"connected_area": pipe.connected_surface_area}}
+            nx.set_edge_attributes(self.network, edge_attrs)
+
+        for node in self.network.nodes:
+            attrs = {node: {"connected_area": 0, "split": 1}}
+            nx.set_node_attributes(self.network, attrs)
+
+        nodes = [n for n, d in self.network.in_degree() if d == 0]
+        visited = set()
+
+        for node in nodes:
+            if node in visited:
+                continue
+
+            stack = self.network.successors(node)
+            out_edges = []
+            # Find all edges that extend from the starting node (root)
+            while stack:
+                try:
+                    out_node = next(stack)
+                    out_edges += [(node, out_node)]
+                    # Nodes connected to the start node are added to the root nodes 
+                    # Will be picked up in the next iteration
+                    nodes.extend([out_node])
+                except StopIteration:
+                    break
+
+            nr_out_edges = len(out_edges)
+            if nr_out_edges > 0:
+                for edge in out_edges:
+                    
+                    # Determine how incoming area should be divided
+                    split = 1 / nr_out_edges
+                    in_node_connected_area = nx.get_node_attributes(
+                        self.network, "connected_area"
+                    )[edge[0]]
+                    out_node_connected_area = nx.get_node_attributes(
+                        self.network, "connected_area"
+                    )[edge[1]]
+
+                    edge_connected_surface_area = nx.get_edge_attributes(
+                        self.network, "connected_area"
+                    )[edge]
+                    
+                    # The total amount of connected area of the outer node
+                    # This includes the connected area that is already present on the out node
+                    new_out_node_connected_area = (
+                        edge_connected_surface_area
+                        + split * in_node_connected_area
+                        + out_node_connected_area
+                    )
+                    
+                    # The edge connected area does not include the area present on the out node
+                    new_edge_connected_surface_area = (
+                        edge_connected_surface_area + split * in_node_connected_area
+                    )
+
+                    out_node_attrs = {
+                        edge[1]: {
+                            "split": split,
+                            "connected_area": new_out_node_connected_area,
+                        }
+                    }
+                    nx.set_node_attributes(self.network, out_node_attrs)
+
+                    edge_attrs = {
+                        edge: {"connected_area": new_edge_connected_surface_area}
+                    }
+                    nx.set_edge_attributes(self.network, edge_attrs)
+
+                    pipe = self.get_pipe_with_edge(edge)
+                    pipe.accumulated_connected_surface_area = (
+                        new_edge_connected_surface_area
+                    )
+
+            visited.add(node)
 
     def add_id_to_nodes(self):
         """Add an incremental id to all nodes in the network"""
@@ -423,12 +513,10 @@ class PipeNetwork:
 
     def get_pipe_with_edge(self, edge):
         """Use network edge to get correspondent Pipe instance"""
-        if not isinstance(edge, nx.classes.reportviews.OutEdgeDataView):
-            edge = self.network.edges(edge, data=True)
 
-        edge_data = list(edge)[0][2]
-        edge_fid = edge_data["fid"]
+        edge_fid = nx.get_edge_attributes(self.network, "fid")[edge]
         pipe = self.pipes[edge_fid]
+
         return pipe
 
     def find_upstream_pipes(self, node):
@@ -440,15 +528,23 @@ class PipeNetwork:
             upstream_pipes.append(pipe)
 
         return upstream_pipes
-    
-    def distance_to_outlet(self, node):
+
+    def distance_to_weir(self, node):
         """Get the distance to the outlet from a node in the network"""
         
+        spl = nx.all_pairs_shortest_path_length(self.network)
+        distance_to_weir = spl[node][self.weir.coordinate]
+        
+        return distance_to_weir
 
-    def validate_network_diameters(self):
-        # TODO Walk the network and determine that there are no decreases in diameter
+    def find_furthest_upstream_node(self, node):
+        """Find the distance in meters to the furthest upstream node"""
         pass
 
+    def validate_network_diameters(self):
+
+        # TODO Walk the network and determine that there are no decreases in diameter
+        pass
 
 
 class StormWaterPipeNetwork(PipeNetwork):
@@ -459,25 +555,24 @@ class StormWaterPipeNetwork(PipeNetwork):
 
     @property
     def network_upstream_hydraulic_head(self):
-        """Used to estimate the max hydraulic gradient"""        
+        """Used to estimate the max hydraulic gradient"""
         if self.weir is not None:
             return self.weir.freeboard + self.weir.weir_level
-    
+
     def calculate_required_cover_depth(self):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
         lowest_cover_depth_network = min(
             pipe.minimum_cover_depth for pipe in self.pipes.values()
         )
 
-        for pipe in self.pipes.values():            
-            if pipe.invert_level_start is None:            
+        for pipe in self.pipes.values():
+            if pipe.invert_level_start is None:
                 pipe.invert_level_start = lowest_cover_depth_network
             if pipe.invert_level_end is None:
                 pipe.invert_level_end = lowest_cover_depth_network
 
-
     def estimate_internal_weir_locations(self):
-        #TODO  For a given network and elevation model, determine the best locations to install weirs
+        # TODO  For a given network and elevation model, determine the best locations to install weirs
         # If there are already weirs in the network, raise error
         pass
 
@@ -513,11 +608,10 @@ class SewerageDesigner:
 
     def set_bgt_inlooptabel(self, filename):
         self.bgt_inlooptabel = BGTInloopTabel(filename)
-        
+
     def set_design_rain(self, design_rain):
         if design_rain in AREA_WIDE_RAIN.keys():
             design_rain_pattern = AREA_WIDE_RAIN[design_rain]
         else:
             raise KeyError("Selected design rain not availabe")
         self.design_rain = design_rain_pattern
-

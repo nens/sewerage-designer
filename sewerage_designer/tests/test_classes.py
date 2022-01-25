@@ -63,7 +63,7 @@ def test_bgt_inlooptabel():
     assert pytest.approx(surface_area_7) == 53.90597
     assert pytest.approx(surface_area_8) == 114.7000
     
-def test_network_connected_surface_area():
+def test_network_connected_surface_area_simple_network():
     """Test aggregated surface areas along the network"""
     
     pipes = ['LINESTRING (0 0, 1 0)',
@@ -80,6 +80,32 @@ def test_network_connected_surface_area():
     assert stormwaternetwork.pipes[0].accumulated_connected_surface_area == 1
     assert stormwaternetwork.pipes[1].accumulated_connected_surface_area == 2
     assert stormwaternetwork.pipes[2].accumulated_connected_surface_area == 3    
+
+    
+def test_network_connected_surface_area_mesh_network():
+    """Test aggregated surface areas along the network, for a meshed network"""
+
+    pipe_fn = TEST_DIRECTORY / 'test_pipes_simple_mesh_design.gpkg'
+    pipe_ds = ogr.Open(str(pipe_fn))
+    pipe_layer = pipe_ds.GetLayer(0)
+    stormwaternetwork = StormWaterPipeNetwork()
+
+    for i, feature in enumerate(pipe_layer):
+        geom = feature.GetGeometryRef()
+        wkt = geom.ExportToWkt()
+        pipe = Pipe(wkt_geometry=wkt, fid=i)
+        pipe.connected_surface_area = 1
+        stormwaternetwork.add_pipe(pipe)
+
+    stormwaternetwork.accumulate_connected_surface_area()
+    
+    assert stormwaternetwork.pipes[0].accumulated_connected_surface_area == 1
+    assert stormwaternetwork.pipes[1].accumulated_connected_surface_area == 1.5
+    assert stormwaternetwork.pipes[2].accumulated_connected_surface_area == 1.5 
+    assert stormwaternetwork.pipes[3].accumulated_connected_surface_area == 2.5    
+    assert stormwaternetwork.pipes[4].accumulated_connected_surface_area == 2.5    
+    assert stormwaternetwork.pipes[5].accumulated_connected_surface_area == 6    
+
 
 def test_calculate_max_hydraulic_gradient():
 
@@ -102,8 +128,8 @@ def test_calculate_max_hydraulic_gradient():
     
     stormwaternetwork.calculate_max_hydraulic_gradient(outlet_node=weir.coordinate, waking=0)
 
-    theoretical_max_hydraulic_head = (8-6.5)/3
-    assert stormwaternetwork.pipes[0].max_hydraulic_gradient == theoretical_max_hydraulic_head
+    theoretical_max_hydraulic_gradient = (8-6.5)/3
+    assert stormwaternetwork.pipes[0].max_hydraulic_gradient == theoretical_max_hydraulic_gradient
 
 def test_calculate_discharge():
     pass
