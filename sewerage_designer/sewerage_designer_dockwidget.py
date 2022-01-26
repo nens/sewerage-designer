@@ -25,11 +25,14 @@
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
-from constants import *
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsMapLayerProxyModel
-from sewerage_designer import *
+
+from qgis_connector import pipe_network_from_layer
+from sewerage_designer_core.sewerage_designer_classes import BGTInloopTabel
+from sewerage_designer_core.constants import *
+
 
 FORM_CLASS,_=uic.loadUiType(os.path.join(
     os.path.dirname(__file__),'sewerage_designer_dockwidget_base.ui'))
@@ -47,7 +50,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         # self.<objectname>, and you can use autoconnect slots - see
         # http://doc.qt.io/qt-5/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
+
         self.setupUi(self)
+
+        self.sewerage_network = None
+
         self.mQgsFileWidget_PathEmptyGeopackage.setStorageMode(3) #set to save mode
         self.mQgsFileWidget_PathEmptyGeopackage.setFilter('*.gpkg')
         self.pushButton_CreateNewGeopackage.clicked.connect(self.pushbutton_create_new_geopackage_isChecked)
@@ -57,13 +64,15 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
         self.mMapLayerComboBox_CS.setShowCrs(True)
         self.mMapLayerComboBox_CS.setFilters(QgsMapLayerProxyModel.VectorLayer)
-        self.pushButton_ComputeCS.clicked.connect(self.pushbutton_computeCS_isChecked)
         for key in AREA_WIDE_RAIN:
             self.comboBox_DesignRain.addItem(key)
         self.lineEdit_PeakIntensity.setText(str(max(AREA_WIDE_RAIN[list(AREA_WIDE_RAIN.keys())[0]]))) #initialise intensity with first event
         self.comboBox_DesignRain.currentTextChanged.connect(self.write_peak_intensity) #change intensity if users changes design event
         self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)        
         self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
+        
+        self.pushButton_ComputeCS.clicked.connect(self.compute_connected_surfaces)
+    
 
     def add_group(self,group_name):
         group=QgsProject.instance().layerTreeRoot().addGroup(group_name) 
@@ -118,6 +127,63 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         
     def something_went_wrong_message(self,message):
         QtWidgets.QMessageBox.about(self,"Something went wrong",message)
+        
+        
+    def create_network_from_layers(self):
+        sewerage_layer = QgsProject.instance().mapLayersByName('sewerage')[0]
+        weir_layer = QgsProject.instance().mapLayersByName('weir')[0]
+        pumping_station_layer = QgsProject.instance().mapLayersByName('pumping_station')[0]
+        outlet_layer = QgsProject.instance().mapLayersByName('outlet')[0]
+        self.network = pipe_network_from_layer(pipe_layer=sewerage_layer, weir_layer=weir_layer)
+        # Check if layers are present and try to create a network using qgis connector
+        # Check validity of network (check if weir is present)
+        # Check if BGT inlooptabel is present
+
+    def add_elevation_to_network(self):
+        """If DEM dropdown changes, calculate elevation for all pipes and write back to layer"""
+            
+        dem = self.dockwidget.get_DEM()
+        dem_datasource = gdal.Open(dem)
+        dem_rasterband = dem_datasource.GetRasterBand(1)
+        dem_geotransform = dem_datasource.GetGeoTransform()
+        for pipe in self.network.pipes.items():
+            pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
+
+        # TODO write output back to qgis layers
+        #network_to_layers(self.sewerage_network)
+
+    def compute_connected_surfaces(self):
+        """Create a pipe network and calculate the connected surfaces"""
+        if self.sewerage_network is None:
+            self.sewerage_network = self.create_network_from_layers()
+        
+        bgt_inlooptabel_fn = self.get_BGT_inlooptabel()
+        bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_fn)
+        
+        for pipe in self.sewerage_network.pipes:
+            pipe.determine_connected_surface_area(bgt_inlooptabel)
+        
+        self.sewerage_network.accumulate_connected_surface_area()
+                        
+        # TODO write output back to qgis layers, create function in qgis_connector
+        #network_to_layers(self.sewerage_network)
+    
+    def compute_diameters(self):
+        """Compute diameters for the current network and design rainfall event"""
+        
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+       
+        weir_coordinate = self.sewerage_network.weir.coordinate
+        self.sewerage_network.calculate_max_hydraulic_gradient(weir.coordinate, waking=waking)
+        self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=waking)
+
+        
+    def validate_depths(self):
+        """Check if the computed depths fit the criteria of the minimum cover depth"""
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+
 
     def compute_CS(self):
         #TODO       
