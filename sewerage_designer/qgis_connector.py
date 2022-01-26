@@ -1,11 +1,10 @@
 from osgeo import ogr
-from qgis.core import QgsFeature, QgsLayer
+from qgis.core import QgsFeature, QgsVectorLayer
 
 from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir,StormWaterPipeNetwork, WasteWaterPipeNetwork
 from sewerage_designer_core.constants import *
 
 ogr.UseExceptions()
-
 
 class SewerageDesignerQgsConnector:
     def __init__(self):
@@ -54,19 +53,21 @@ def update_qgs_feature(layer, feature_id, attribute, attribute_value):
 
     provider.changeAttributeValues( updateMap )    
 
-def pipe_network_from_layer(pipe_layer: QgsLayer, weir_layer = QgsLayer):
+def pipe_network_from_layer(pipe_layer, weir_layer):
     # Assumptions: pipes in the layer form a single network with one type
-    sewerage_types = {feature['sewerage_type'] for feature in pipe_layer}
+    pipe_features = pipe_layer.getFeatures()
+    weir_features = weir_layer.getFeatures()
+    sewerage_types = {feature['sewerage_type'] for feature in pipe_features}
     if len(sewerage_types) > 1:
         raise ValueError('Multiple sewerage types in layer')
     sewerage_type = sewerage_types.pop()
     if sewerage_type in [HEMELWATERRIOOL, INFILTRATIEVOORZIENING, VGS_HEMELWATERRIOOL]:
         network = StormWaterPipeNetwork()
-        for feature in pipe_layer:
+        for feature in pipe_features:
             pipe = pipe_from_feature(feature)
             network.add_pipe(pipe)
             
-        for feature in weir_layer:
+        for feature in weir_features:
             weir = weir_from_feature(feature)
             network.add_weir(weir)
             
