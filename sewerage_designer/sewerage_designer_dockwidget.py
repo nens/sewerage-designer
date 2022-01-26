@@ -29,6 +29,7 @@ from constants import *
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsMapLayerProxyModel
+from sewerage_designer import *
 
 FORM_CLASS,_=uic.loadUiType(os.path.join(
     os.path.dirname(__file__),'sewerage_designer_dockwidget_base.ui'))
@@ -92,7 +93,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         return path
     
     def get_BGT_inlooptabel(self):
-        self.BGT_inlooptabel=self.mMapLayerComboBox_CS.currentLayer().source()
+        BGT_inlooptabel=self.mMapLayerComboBox_CS.currentLayer().source()
+        return BGT_inlooptabel
         
     def get_peak_intensity_design_event(self,AREA_WIDE_RAIN):
         event=self.comboBox_DesignRain.currentText()
@@ -111,10 +113,23 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def copy(self,source,dest):
     	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
 
-    def compute_CS(self,BGT_inlooptabel):
-        #TODO
-        pass
-    
+    def finished_computation_message(self,message):
+        QtWidgets.QMessageBox.about(self,"Computation finished",message)
+        
+    def something_went_wrong_message(self,message):
+        QtWidgets.QMessageBox.about(self,"Something went wrong",message)
+
+    def compute_CS(self):
+        #TODO       
+        try:
+            BGT_inlooptabel=self.get_BGT_inlooptabel()
+            hoofdfunctie_die_cs_berekent(BGT_inlooptabel) #TODO
+            message='The connected surfaces are computed. You can now proceed to compute the diameters.'
+            self.finished_computation_message(message)
+        except Exception as ex:
+            message='Something went wrong: 'f"{ex}"
+            self.something_went_wrong_message(message)
+            
     def check_input(self):
         response=QtWidgets.QMessageBox.Yes #by definition if not changed
         intensity=self.get_final_peak_intensity_from_lineedit()
@@ -129,11 +144,25 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
 
     def compute_diameters(self):
         #TODO
-        QtWidgets.QMessageBox.about(self,"Check","Check: nu gaan we rekenen")
+        try:
+            DEM=self.get_DEM()
+            hoofdfunctie_die_diameters_berekent(DEM) #TODO
+            message='The diameters are computed. You can now proceed to validate/ compute the depths.'
+            self.finished_computation_message(message)
+        except Exception as ex:
+            message='Something went wrong: 'f"{ex}"
+            self.something_went_wrong_message(message)
 
     def compute_depths(self):
         #TODO
-        pass
+        try:
+            DEM=self.get_DEM()
+            hoofdfunctie_die_depths_berekent(DEM) #TODO
+            message='The depths are validated/ computed.'
+            self.finished_computation_message(message)
+        except Exception as ex:
+            message='Something went wrong: 'f"{ex}"
+            self.something_went_wrong_message(message)        
     		   	
     def pushbutton_create_new_geopackage_isChecked(self):
         dest=self.get_geopackage_save_path()
