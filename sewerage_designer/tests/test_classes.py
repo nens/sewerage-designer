@@ -131,6 +131,34 @@ def test_calculate_max_hydraulic_gradient():
     theoretical_max_hydraulic_gradient = (8-6.5)/3
     assert stormwaternetwork.pipes[0].max_hydraulic_gradient == theoretical_max_hydraulic_gradient
 
+def test_evalute_max_hydraulic_gradient():
+
+    pipes = ['LINESTRING (0 0, 1 0)',
+             'LINESTRING (1 0, 2 0)',
+             'LINESTRING (2 0, 3 0)']    
+        
+    stormwaternetwork = StormWaterPipeNetwork()
+    for i, feature in enumerate(pipes):
+        pipe = Pipe(feature, i)
+        pipe.start_elevation = 8
+        pipe.end_elevation = 8
+        pipe.lowest_elevation = 8
+        stormwaternetwork.add_pipe(pipe)        
+
+    stormwaternetwork.pipes[1].lowest_elevation = 7
+
+    weir = 'POINT (3 0)'
+    weir = Weir(weir, 1)
+    weir.weir_level = 6
+    weir.freeboard = 0.5
+    stormwaternetwork.add_weir(weir)
+    
+    stormwaternetwork.calculate_max_hydraulic_gradient(outlet_node=weir.coordinate, waking=0)
+    stormwaternetwork.evaluate_hydraulic_gradient_upstream(waking=0)
+    
+    assert stormwaternetwork.pipes[0].max_hydraulic_gradient == 0.25
+
+
 def test_calculate_discharge():
     pass
 

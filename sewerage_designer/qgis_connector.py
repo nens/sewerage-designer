@@ -13,10 +13,11 @@ class SewerageDesignerQgsConnector:
 
 
 def pipe_from_feature(feature: QgsFeature):
-    wkb_geometry = feature.geometry().asWkb()
+    wkt_geometry = feature.geometry().asWkt()
 
     return Pipe(
-        wkb_geometry,
+        wkt_geometry,
+        feature['fid'],
         feature['diameter'],
         feature['start_level'],
         feature['end_level'],
@@ -40,6 +41,7 @@ def pipe_network_from_layer(layer: QgsLayer):
         network = WasteWaterPipeNetwork()
     else:
         raise ValueError('Invalid sewerage type')
+        
     for feature in layer:
         pipe = pipe_from_feature(feature)
         pipe.calculate_elevation()

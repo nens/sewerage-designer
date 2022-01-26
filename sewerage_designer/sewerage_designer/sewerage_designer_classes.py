@@ -36,6 +36,7 @@ AREA_WIDE_RAIN = {
 }
 
 
+
 DESIGN_RAIN_TIMESTEP = 300
 BGT_INLOOPTABEL_REQUIRED_FIELDS = [
     "bgt_identificatie",
@@ -302,7 +303,9 @@ class Pipe:
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
 
         # intensity is in mm/hr, timestep is in seconds
-        pipe_discharge = self.accumulated_connected_surface_area * ((intensity / 1000) / timestep)
+        pipe_discharge = self.accumulated_connected_surface_area * (
+            (intensity / 1000) / timestep
+        )
         self.discharge = pipe_discharge
 
     def calculate_diameter(self):
@@ -365,6 +368,12 @@ class PipeNetwork:
         """Returns a dictionary for each node a dictionary with distances to every other node"""
         return dict(nx.all_pairs_dijkstra(self.reverse_network, weight="length"))
 
+    @property
+    def network_upstream_hydraulic_head(self):
+        """Used to estimate the max hydraulic gradient"""
+        if self.weir is not None:
+            return self.weir.freeboard + self.weir.weir_level
+
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
         self.pipes[pipe.fid] = pipe
@@ -400,11 +409,7 @@ class PipeNetwork:
         and the furthest node divided by the distance between the two
         Assign this back to all the pipes in the network
         """
-
-        # TODO waking over gehele trace berekenen
-        # TODO aanpassen hydraulische gradient op basis van evaluatie
-        # Get the distance dictionary for the end node
-
+        
         # Get the distance dictionary for the end node
         distance_dictionary = self.distance_matrix_reversed[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
@@ -416,13 +421,34 @@ class PipeNetwork:
             - self.network_upstream_hydraulic_head
         ) / distance
 
+        self.max_hydraulic_gradient = max_hydraulic_gradient
         for pipe in self.pipes:
             setattr(self.pipes[pipe], "max_hydraulic_gradient", max_hydraulic_gradient)
 
-    def evaluate_hydraulic_gradient_upstream(self):
+    def evaluate_hydraulic_gradient_upstream(self, waking):
         """Evaluate the maximum hydraulic gradient for each pipe in the network based on it's elevation"""
-        pass
-    
+
+        for edge in self.network.edges:
+            pipe = self.get_pipe_with_edge(edge)
+            start_node = edge[0]
+            distance_to_weir = self.distance_to_weir(start_node)
+            
+            hydraulic_head = (
+                self.network_downstream_hydraulic_head
+                + pipe.max_hydraulic_gradient * distance_to_weir
+            )
+            head_difference = hydraulic_head - (pipe.lowest_elevation + waking)
+            if head_difference > 0:
+                new_hydraulic_gradient = pipe.max_hydraulic_gradient - (
+                    head_difference / distance_to_weir
+                )
+                if new_hydraulic_gradient < self.max_hydraulic_gradient:
+                    self.max_hydraulic_gradient = new_hydraulic_gradient
+
+        for pipe in self.pipes:
+            setattr(
+                self.pipes[pipe], "max_hydraulic_gradient", self.max_hydraulic_gradient
+            )
 
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
@@ -450,8 +476,6 @@ class PipeNetwork:
                 try:
                     out_node = next(stack)
                     out_edges += [(node, out_node)]
-                    # Nodes connected to the start node are added to the root nodes 
-                    # Will be picked up in the next iteration
                     nodes.extend([out_node])
                 except StopIteration:
                     break
@@ -459,7 +483,7 @@ class PipeNetwork:
             nr_out_edges = len(out_edges)
             if nr_out_edges > 0:
                 for edge in out_edges:
-                    
+
                     # Determine how incoming area should be divided
                     split = 1 / nr_out_edges
                     in_node_connected_area = nx.get_node_attributes(
@@ -472,7 +496,7 @@ class PipeNetwork:
                     edge_connected_surface_area = nx.get_edge_attributes(
                         self.network, "connected_area"
                     )[edge]
-                    
+
                     # The total amount of connected area of the outer node
                     # This includes the connected area that is already present on the out node
                     new_out_node_connected_area = (
@@ -480,7 +504,7 @@ class PipeNetwork:
                         + split * in_node_connected_area
                         + out_node_connected_area
                     )
-                    
+
                     # The edge connected area does not include the area present on the out node
                     new_edge_connected_surface_area = (
                         edge_connected_surface_area + split * in_node_connected_area
@@ -493,7 +517,6 @@ class PipeNetwork:
                         }
                     }
                     nx.set_node_attributes(self.network, out_node_attrs)
-
                     edge_attrs = {
                         edge: {"connected_area": new_edge_connected_surface_area}
                     }
@@ -503,6 +526,9 @@ class PipeNetwork:
                     pipe.accumulated_connected_surface_area = (
                         new_edge_connected_surface_area
                     )
+                    
+                    print(pipe.fid)
+                    print(new_edge_connected_surface_area)
 
             visited.add(node)
 
@@ -513,7 +539,6 @@ class PipeNetwork:
 
     def get_pipe_with_edge(self, edge):
         """Use network edge to get correspondent Pipe instance"""
-
         edge_fid = nx.get_edge_attributes(self.network, "fid")[edge]
         pipe = self.pipes[edge_fid]
 
@@ -531,18 +556,13 @@ class PipeNetwork:
 
     def distance_to_weir(self, node):
         """Get the distance to the outlet from a node in the network"""
-        
-        spl = nx.all_pairs_shortest_path_length(self.network)
+
+        spl = dict(nx.all_pairs_shortest_path_length(self.network))
         distance_to_weir = spl[node][self.weir.coordinate]
-        
+
         return distance_to_weir
 
-    def find_furthest_upstream_node(self, node):
-        """Find the distance in meters to the furthest upstream node"""
-        pass
-
     def validate_network_diameters(self):
-
         # TODO Walk the network and determine that there are no decreases in diameter
         pass
 
@@ -554,12 +574,12 @@ class StormWaterPipeNetwork(PipeNetwork):
         self.network_type = "infiltratieriool"
 
     @property
-    def network_upstream_hydraulic_head(self):
+    def network_downstream_hydraulic_head(self):
         """Used to estimate the max hydraulic gradient"""
         if self.weir is not None:
             return self.weir.freeboard + self.weir.weir_level
 
-    def calculate_required_cover_depth(self):
+    def check_required_cover_depth(self):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
         lowest_cover_depth_network = min(
             pipe.minimum_cover_depth for pipe in self.pipes.values()

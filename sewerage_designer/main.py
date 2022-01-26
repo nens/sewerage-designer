@@ -27,6 +27,10 @@ if __name__ == '__main__':
     #TODO DOwnload empty geopackge from GUI
     #TODO Dekking checken, diepteligging wordt bepaald door de drempelhoogte
     #TODO Colebrook-white beschikbare diameters variabel maken
+    
+    # Test design to list of wkt's
+    pipe_ds = ogr.Open('./tests/test_data/test_pipes_simple_split_design_max_gradient.gpkg')
+    pipe_layer = pipe_ds.GetLayer(0)
 
     # Settings
     network_type = 'infiltratieriool'
@@ -38,36 +42,25 @@ if __name__ == '__main__':
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
 
-    sd = SewerageDesigner()
-
-    # Load DEM rasterband and geotransform
-    sd.set_dem(dem_fn)
-
-    # Load BGT Inlooptabel
-    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
-    bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code=8, pipe_type='infiltratievoorziening')
-    sd.set_bgt_inlooptabel(bgt_inlooptabel_fn)
-
     # Define a new pipe network
     stormwater_network = StormWaterPipeNetwork()
 
-    # Get pipes
-    pipe_json = r'.\tests\test_data\pipes_simple_network.json'
-    weir_json = r'.\tests\test_data\weir_simple_network.json'
-    pipes = json.load(open(pipe_json, 'r'))
-    weirs = json.load(open(weir_json, 'r'))
-
     # Add some pipes
-    for i, feature in enumerate(pipes):
-        pipe = Pipe(feature, i)
-        pipe.connected_surface_area = 1
+    for feature in pipe_layer:
+        props = json.loads(feature.ExportToJson())['properties']
+        geom = feature.GetGeometryRef()
+        wkt = geom.ExportToWkt()
+        pipe = Pipe(wkt, props['id'])
+        pipe.connected_surface_area = 100
         pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
         stormwater_network.add_pipe(pipe)
 
     stormwater_network.add_id_to_nodes()
     
     # Add an weir
-    weir = Weir(weirs[0], 1)
+    # We can use the final pipe's coordinate
+    wkt = 'POINT (105113.27273163 386797.394822074)'
+    weir = Weir(wkt, 1)
     weir.freeboard = 0.1
     weir.weir_level = 6
     stormwater_network.add_weir(weir)
@@ -76,24 +69,92 @@ if __name__ == '__main__':
     # Determine connected surface areas and the max hydraulic gradient for the whole network
     stormwater_network.accumulate_connected_surface_area()
     stormwater_network.calculate_max_hydraulic_gradient(weir.coordinate, waking=waking)
+    stormwater_network.evaluate_hydraulic_gradient_upstream(waking=waking)
 
     # Calculate the capacity for all the pipes
-    for pipe_id, pipe in it_pipe_network.pipes.items():
+    for pipe_id, pipe in stormwater_network.pipes.items():
         # Use Colebrook-White to estimate a diameter
-        pipe.calculate_discharge(design_rain=design_rain)
+        pipe.calculate_discharge(intensity=1, timestep = 300)
         pipe.calculate_diameter()
         pipe.set_material()
         pipe.calculate_minimum_cover_depth(minimal_cover_depth=1)
 
     # Determine the depth for all pipes
-    it_pipe_network.calculate_required_cover_depth()
+    stormwater_network.check_required_cover_depth()
 
-    # # Save results to pipes layer
-    for pipe in it_pipe_network.pipes.values():
-        pipe.write_properties_to_feature()
-        pipes.SetFeature(pipe.feature)
-        pipe.feature = None
 
-    #
-    pipes = None
-    test_tracing_ds = None
+    pipe= stormwater_network.pipes[30]
+    node = (pipe.start_coordinate)
+
+    visited = set()
+    nodes = [stormwater_network.weir.coordinate]
+    stormwater_network.distance_matrix_reversed[weir.coordinate][0][-1]
+
+    for node in nodes:
+                
+        if node in visited:
+            continue
+
+
+
+        # Get the distance dictionary for the end node
+        distance_dictionary = stormwater_network.distance_matrix_reversed[node][0]
+        furthest_node, distance = list(distance_dictionary.items())[-1]
+        furthest_edge = list(stormwater_network.network.edges(furthest_node))[0]
+        # Get start elevation + waking for this edge 
+        # Calculate hydraulic gradient
+        hydraulic_gradient = 0.07
+        
+        # Assign hydraulic head to nodes along the path
+        path_nodes = list(distance_dictionary.keys())
+        for i in range(0, len(distance_dictionary.keys())-1):
+            path_edge = (path_nodes[i+1],path_nodes[i])
+            edge_hydraulic_gradient = 0.07
+            # Evaluate hydraulic gradient with lowest surface level
+            if edge_hydraulic_gradient is not None:
+                # if new hydraulic gradient > current hydraulic gradient
+                pass
+            else:
+                # new hydraulic gradient
+                pass
+                
+        # Find where to continue
+        stack = stormwater_network.network.predecessors(node)
+        out_edges = []
+        while stack:
+            try:
+                out_node = next(stack)
+                out_edges += [(node, out_node)] 
+                nodes.extend([out_node])
+            except StopIteration:
+                break
+        
+        # Visited nodes
+        visited.add(node)
+        
+        
+        
+        
+        nr_out_edges = len(out_edges)
+        if nr_out_edges > 0:
+            for edge in out_edges:
+                split = 1 / nr_out_edges
+                in_node_connected_area = nx.get_node_attributes(stormwater_network.network, 'connected_area')[edge[0]]
+                out_node_connected_area = nx.get_node_attributes(stormwater_network.network, 'connected_area')[edge[1]]
+                in_node_split = nx.get_node_attributes(stormwater_network.network, 'split')[edge[0]]
+                 
+                edge_connected_surface_area = nx.get_edge_attributes(stormwater_network.network, 'connected_area')[edge]
+                edge_id = nx.get_edge_attributes(stormwater_network.network, 'fid')[edge]
+                new_out_node_connected_area = edge_connected_surface_area + split * in_node_connected_area + out_node_connected_area
+                new_edge_connected_surface_area = edge_connected_surface_area + split * in_node_connected_area
+                
+                out_node_attrs = {edge[1]: {'split':split, 'connected_area':new_out_node_connected_area}}
+                nx.set_node_attributes(stormwater_network.network, out_node_attrs)
+                
+                edge_attrs = {edge: {'connected_area': new_edge_connected_surface_area}}
+                nx.set_edge_attributes(stormwater_network.network, edge_attrs)
+                print(edge_id)
+                print(edge_attrs)
+                
+        visited.add(node)
+        
