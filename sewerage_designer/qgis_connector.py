@@ -1,8 +1,8 @@
 from osgeo import ogr
 from qgis.core import QgsFeature, QgsLayer
 
-from sewerage_designer_classes import Pipe, StormWaterPipeNetwork, WasteWaterPipeNetwork
-from constants import *
+from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir,StormWaterPipeNetwork, WasteWaterPipeNetwork
+from sewerage_designer_core.constants import *
 
 ogr.UseExceptions()
 
@@ -29,22 +29,54 @@ def pipe_from_feature(feature: QgsFeature):
         feature['velocity']
     )
 
-def pipe_network_from_layer(layer: QgsLayer):
+def weir_from_feature(feature: QgsFeature):
+    wkt_geometry = feature.geometry().asWkt()
+
+    return Weir(
+        wkt_geometry,
+        feature['fid'],
+        feature['weir_level'],
+        feature['surface_elevation'],
+        feature['freeboard'],
+        feature['pipe_in_id'],
+        feature['pipe_out_id'],
+        feature['hydraulic_head']
+    ) 
+
+    
+def update_qgs_feature(layer, feature_id, attribute, attribute_value):
+    provider = layer.dataProvider()
+    updateMap = {}
+    fieldIdx = provider.fields().indexFromName( 'attr' )
+    features = provider.getFeatures()
+    for feature in features:
+        updateMap[feature.id()] = { fieldIdx: 'a' }
+
+    provider.changeAttributeValues( updateMap )    
+
+def pipe_network_from_layer(pipe_layer: QgsLayer, weir_layer = QgsLayer):
     # Assumptions: pipes in the layer form a single network with one type
-    sewerage_types = {feature['sewerage_type'] for feature in layer}
+    sewerage_types = {feature['sewerage_type'] for feature in pipe_layer}
     if len(sewerage_types) > 1:
         raise ValueError('Multiple sewerage types in layer')
     sewerage_type = sewerage_types.pop()
     if sewerage_type in [HEMELWATERRIOOL, INFILTRATIEVOORZIENING, VGS_HEMELWATERRIOOL]:
         network = StormWaterPipeNetwork()
+        for feature in pipe_layer:
+            pipe = pipe_from_feature(feature)
+            network.add_pipe(pipe)
+            
+        for feature in weir_layer:
+            weir = weir_from_feature(feature)
+            network.add_weir(weir)
+            
+        network.add_id_to_nodes()
+        return network
+
     elif sewerage_type in [GEMENGD_RIOOL, VUILWATERRIOOL]:
         network = WasteWaterPipeNetwork()
+        
+        return network
     else:
         raise ValueError('Invalid sewerage type')
-        
-    for feature in layer:
-        pipe = pipe_from_feature(feature)
-        pipe.calculate_elevation()
-        it_pipe_network.add_pipe(pipe)
-
-    it_pipe_network.add_id_to_nodes()
+            

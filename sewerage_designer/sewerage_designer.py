@@ -31,6 +31,8 @@ from .resources import *
 from .sewerage_designer_dockwidget import SewerageDesignerDockWidget
 import os.path
 
+from qgis_connector import pipe_network_from_layer
+from sewerage_designer_core.sewerage_designer_classes import BGTInloopTabel
 
 class SewerageDesigner:
     """QGIS Plugin Implementation."""
@@ -72,6 +74,8 @@ class SewerageDesigner:
 
         self.pluginIsActive = False
         self.dockwidget = None
+        
+        self.sewerage_network = None
 
 
     # noinspection PyMethodMayBeStatic
@@ -205,7 +209,66 @@ class SewerageDesigner:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
+    
+    def create_network_from_layers(self):
+        
+        sewerage_layer = QgsProject.instance().mapLayersByName(QGS_SEWERAGE_LAYER_NAME)
+        weir_layer = QgsProject.instance().mapLayersByName(QGS_WEIR_LAYER_NAME)
+        pumping_station_layer = QgsProject.instance().mapLayersByName(QGS_PUMPING_STATION_LAYER_NAME)
+        outlet_layer = QgsProject.instance().mapLayersByName(QGS_OUTLET_LAYER_NAME)
+        self.network = pipe_network_from_layer(pipe_layer=pipe_layer, weir_layer=weir_layer)
+        # Check if layers are present and try to create a network using qgis connector
+        # Check validity of network (check if weir is present)
+        # Check if BGT inlooptabel is present
 
+    def add_elevation_to_network(self):
+        """If DEM dropdown changes, calculate elevation for all pipes and write back to layer"""
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+            
+        dem = self.dockwidget.get_DEM()
+        dem_datasource = gdal.Open(dem)
+        dem_rasterband = dem_datasource.GetRasterBand(1)
+        dem_geotransform = dem_datasource.GetGeoTransform()
+        for pipe in self.network.pipes.items():
+            pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
+            
+        # update qgs layer?
+        network_to_layers(self.sewerage_network)
+
+    def compute_connected_surfaces(self):
+        """Create a pipe network and calculate the connected surfaces"""
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+        
+        bgt_inlooptabel_fn = self.dockwidget.get_BGT_inlooptabel()
+        bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_fn)
+        
+        for pipe in self.sewerage_network.pipes:
+            pipe.determine_connected_surface_area(bgt_inlooptabel)
+        
+        self.sewerage_network.accumulate_connected_surface_area()
+        
+        network_to_layers(self.sewerage_network)
+        
+        # Compute connected surfaces
+        # Write values back to QGS layer            
+    
+    def compute_diameters(self):
+        """Compute diameters for the current network and design rainfall event"""
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+       
+        # Compute diameters
+        # Write values back to QGS layer
+        
+    def validate_depths(self):
+        """Check if the computed depths fit the criteria of the minimum cover depth"""
+        if self.sewerage_network is None:
+            self.sewerage_network = create_network_from_layers()
+       
+        
+       
     #--------------------------------------------------------------------------
 
     def run(self):
@@ -230,3 +293,6 @@ class SewerageDesigner:
             # TODO: fix to allow choice of dock location
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dockwidget)
             self.dockwidget.show()
+            
+            # Connect functionality
+
