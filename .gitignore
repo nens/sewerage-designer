@@ -1,6 +1,6 @@
-test_data/
+
 .idea/
 __pycache__/
 *.pyc
 .pytest_cache/
-
+sewerage_designer/tests/test_data/Zundert.tif

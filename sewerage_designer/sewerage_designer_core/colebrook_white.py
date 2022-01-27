@@ -22,11 +22,13 @@ Possible diameters are: 250,315,400,500,600,700,etc..
 
 from bisect import bisect_left, bisect_right
 import math
+from .constants import *
 
 #user-defined variables:
 Q=0.025                 #known discharge [m3/s]
 V_MAX=0.5               #initial max velocity [m/s]
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
+D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2]
 
 # constants
 K=0.003             #assumption from Rioned
@@ -35,10 +37,17 @@ VI=1.007*10**-6     #kinematic viscosity [m2/s]
 
 class ColebrookWhite:
     
-    def __init__(self, q, Smax, v_max=V_MAX):
+    def __init__(self, q, Smax, sewerage_type, v_max=V_MAX):
         self.q=q                 #discharge [m3/s]
         self.vmax=v_max #initial max velocity [m/s]
         self.Smax=Smax          #max hydraulic gradient [-]
+
+        # Options for diameters are dependent on the sewerage type
+        if sewerage_type == INFILTRATIEVOORZIENING:
+            self.d_options = D_OPTIONS_INFILTRATIE
+        else:
+            self.d_options = D_OPTIONS
+        
         
         # Define initial diameter
         self.D_precise = self.calculate_diameter()        
@@ -50,13 +59,13 @@ class ColebrookWhite:
         return D
 
     def find_closest_diameter(self, diameter):
-        pos = bisect_left(D_OPTIONS, diameter)
+        pos = bisect_left(self.d_options, diameter)
         if pos == 0:
-            return D_OPTIONS[0]
-        if pos == len(D_OPTIONS):
-            return D_OPTIONS[-1]
-        before = D_OPTIONS[pos - 1]
-        after = D_OPTIONS[pos]
+            return self.d_options[0]
+        if pos == len(self.d_options):
+            return self.d_options[-1]
+        before = self.d_options[pos - 1]
+        after = self.d_options[pos]
         if after - diameter < diameter - before:
             return after
         else:
@@ -67,7 +76,7 @@ class ColebrookWhite:
         return vmax
     
     def increase_diameter(self):
-        self.D_design = D_OPTIONS[bisect_right(D_OPTIONS, self.D_design)]
+        self.D_design = self.d_options[bisect_right(self.d_options, self.D_design)]
         
     def colebrook_white(self):
         #vcalc=(-2*np.sqrt(2*g*D*Smax))*np.log((k/(3.7*D))+((2.5*vi)/(D*np.sqrt(2*g*D*Smax))))
@@ -78,10 +87,11 @@ class ColebrookWhite:
     def iterate_diameters(self):
         Scalc = self.colebrook_white()
         
-        while Scalc > self.Smax and self.D_design != D_OPTIONS[-1]:
+        while Scalc > self.Smax and self.D_design != self.d_options[-1]:
             self.increase_diameter()
             self.v_max = self.calc_vmax()
             Scalc = self.colebrook_white()
         
         return self.D_design
+        
         

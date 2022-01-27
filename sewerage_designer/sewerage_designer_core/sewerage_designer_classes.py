@@ -11,8 +11,10 @@ from osgeo import gdal, ogr
 import networkx as nx
 import json
 
+from .constants import *
 from .colebrook_white import ColebrookWhite
 from .utils import get_intermediates
+
 
 # Timestep of design rain is 5 minutes
 # Timestep of design rain is 5 minutes
@@ -108,7 +110,7 @@ class BGTInloopTabel:
                 self._table["fid"].append(feature.GetFID())
                 self._table["surface_area"].append(feature_geometry.GetArea())
 
-    def get_surface_area_for_pipe_id(self, pipe_code, pipe_type):
+    def get_surface_area_for_pipe_code(self, pipe_code, pipe_type):
         """Get the connected surface area for a pipe code and which type of sewerage system should be searched"""
         pipe_type_codes = self._table["pipe_code_" + pipe_type]
         surface_areas = []
@@ -117,7 +119,6 @@ class BGTInloopTabel:
                 bgt_identificatie = self._table["bgt_identificatie"][i]
 
                 if bgt_identificatie not in self.connected_surfaces:
-                    print(bgt_identificatie)
                     surface_area_bgt = self._table["surface_area"][i]
                     surface_fraction = self._table[pipe_type][i] / 100
                     connected_area = surface_area_bgt * surface_fraction
@@ -210,6 +211,7 @@ class Pipe:
         material: str = None,
         connected_surface_area: float = None,
         accumulated_connected_surface_area: float = None,
+        max_hydraulic_gradient : float = None,
         sewerage_type: str = None,
         cover_depth: float = None,
         discharge: float = None,
@@ -227,6 +229,7 @@ class Pipe:
         self.cover_depth = cover_depth
         self.discharge = discharge
         self.velocity = velocity
+        self.max_hydraulic_gradient = max_hydraulic_gradient
 
         self.start_elevation = None
         self.end_elevation = None
@@ -294,15 +297,15 @@ class Pipe:
 
     def determine_connected_surface_area(self, bgt_inlooptabel: BGTInloopTabel):
         """Find the connected surface area from the BGT Inlooptabel, sewerage type is needed to filter"""
-        connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_id(
-            pipe_id=str(self.id), pipe_type=self.sewerage_type
+        connected_surface_area = bgt_inlooptabel.get_surface_area_for_pipe_code(
+            pipe_code=str(self.fid), pipe_type=self.sewerage_type
         )
         self.connected_surface_area = connected_surface_area
 
     def calculate_discharge(self, intensity, timestep):
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
 
-        # intensity is in mm/hr, timestep is in seconds
+        # intensity is in mm/hr, timestep is in seconds, output discharge is m3/s
         pipe_discharge = self.accumulated_connected_surface_area * (
             (intensity / 1000) / timestep
         )
@@ -311,7 +314,7 @@ class Pipe:
     def calculate_diameter(self):
         """Use the Colebrook White method to esimate the diameters"""
         colebrook_white = ColebrookWhite(
-            q=self.discharge, Smax=self.max_hydraulic_gradient
+            q=self.discharge, Smax=self.max_hydraulic_gradient, sewerage_type=self.sewerage_type
         )
 
         estimated_diameter = colebrook_white.iterate_diameters()
@@ -322,7 +325,7 @@ class Pipe:
 
         material_thickness = MATERIAL_THICKNESS[self.material]
         minimum_cover_depth = self.lowest_elevation - (
-            minimal_cover_depth + self.diameter + material_thickness
+            minimal_cover_depth + self.diameter + material_thickness * 2
         )
         self.minimum_cover_depth = minimum_cover_depth
 
@@ -519,6 +522,8 @@ class PipeNetwork:
             for successor in node_successors:
                 edge = (node, successor)
                 edge_flow = self.network.nodes[node]["connected_area"]
+                attrs = {edge:{'accumulated_connected_area':edge_flow}}
+                nx.set_edge_attributes(self.network, attrs)
                 pipe = self.get_pipe_with_edge(edge)
                 pipe.accumulated_connected_surface_area = edge_flow
 
@@ -552,11 +557,27 @@ class PipeNetwork:
 
         return distance_to_weir
 
-    def draw_network(self, label_attr):
-        pos = nx.get_node_attributes(self.network, "position")
-        labels = nx.get_node_attributes(self.network, label_attr)
-        nx.draw(self.network, pos, labels=labels, node_size=100)
+    def draw_network(self, node_label_attr, edge_label_attr):
+        
+        G = self.network.copy()
+        for edge in G.edges:
+            pipe = self.get_pipe_with_edge(edge)
+            attr = getattr(pipe, edge_label_attr)
+            if isinstance(attr, float):
+                attr= round(attr,2)
+            attrs = {edge: {edge_label_attr: attr}}
+            nx.set_edge_attributes(G, attrs)
+            
+        node_labels = nx.get_node_attributes(G, node_label_attr)
+        pos = nx.get_node_attributes(G, "position")        
+        nx.draw(
+            G, pos, edge_color='black', width=1, linewidths=1,
+            node_size=100, node_color='pink', alpha=0.9,
+            labels=node_labels)
 
+        edge_labels = nx.get_edge_attributes(G, edge_label_attr)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        
     def validate_network_diameters(self):
         # TODO Walk the network and determine that there are no decreases in diameter
         pass
@@ -574,18 +595,19 @@ class StormWaterPipeNetwork(PipeNetwork):
         if self.weir is not None:
             return self.weir.freeboard + self.weir.weir_level
 
-    def check_required_cover_depth(self):
+    def set_invert_levels(self):
         # For IT network the gradient of the pipes is 0, find the highest possible solution
-        lowest_cover_depth_network = min(
-            pipe.minimum_cover_depth for pipe in self.pipes.values()
-        )
-
+        max_diameter = max([pipe.diameter for pipe in self.pipes.values()])
+        self.network_level = self.weir.weir_level - max_diameter
         for pipe in self.pipes.values():
-            if pipe.invert_level_start is None:
-                pipe.invert_level_start = lowest_cover_depth_network
-            if pipe.invert_level_end is None:
-                pipe.invert_level_end = lowest_cover_depth_network
-
+            pipe.invert_level_start = self.network_level
+            pipe.invert_level_end = self.network_level
+                        
+    def check_invert_levels(self):
+        for pipe in self.pipes.values():
+            if pipe.invert_level_start > pipe.minimum_cover_depth:
+                raise ValueError('Pipe invert level is too high, invert level: {}, minimum invert level: {}'.format(pipe.invert_level_start, pipe.minimum_cover_depth))
+            
     def estimate_internal_weir_locations(self):
         # TODO  For a given network and elevation model, determine the best locations to install weirs
         # If there are already weirs in the network, raise error

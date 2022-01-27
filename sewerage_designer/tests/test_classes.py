@@ -5,7 +5,7 @@ import pathlib
 import json
 import sys
 
-from sewerage_designer.sewerage_designer.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork
+from sewerage_designer.sewerage_designer_core.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork
 
 TEST_DIRECTORY = pathlib.Path(__file__).parent.absolute() / "test_data"
 
@@ -55,9 +55,9 @@ def test_bgt_inlooptabel():
     """Get surface area for pipe id's"""
     bgt_inlooptabel_file = TEST_DIRECTORY  / 'bgt_inlooptabel_test.gpkg'
     bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
-    surface_area_6 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 6, pipe_type='infiltratievoorziening')
-    surface_area_7 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 7, pipe_type='infiltratievoorziening')
-    surface_area_8 = bgt_inlooptabel.get_surface_area_for_pipe_id(pipe_code = 8, pipe_type='infiltratievoorziening')
+    surface_area_6 = bgt_inlooptabel.get_surface_area_for_pipe_code(pipe_code = 6, pipe_type='infiltratievoorziening')
+    surface_area_7 = bgt_inlooptabel.get_surface_area_for_pipe_code(pipe_code = 7, pipe_type='infiltratievoorziening')
+    surface_area_8 = bgt_inlooptabel.get_surface_area_for_pipe_code(pipe_code = 8, pipe_type='infiltratievoorziening')
 
     assert pytest.approx(surface_area_6) == 65.6751
     assert pytest.approx(surface_area_7) == 53.90597
@@ -105,6 +105,30 @@ def test_network_connected_surface_area_mesh_network():
     assert stormwaternetwork.pipes[3].accumulated_connected_surface_area == 2.5    
     assert stormwaternetwork.pipes[4].accumulated_connected_surface_area == 2.5    
     assert stormwaternetwork.pipes[5].accumulated_connected_surface_area == 6    
+
+def test_network_connected_surface_area_mesh_network_2():
+    """Test aggregated surface areas along the network, for a meshed network"""
+
+    pipe_fn = TEST_DIRECTORY / 'test_pipes_mesh_design_2.gpkg'
+    pipe_ds = ogr.Open(str(pipe_fn))
+    pipe_layer = pipe_ds.GetLayer(0)
+    stormwaternetwork = StormWaterPipeNetwork()
+
+    for i, feature in enumerate(pipe_layer):
+        props = json.loads(feature.ExportToJson())['properties']
+        geom = feature.GetGeometryRef()
+        wkt = geom.ExportToWkt()
+        pipe = Pipe(wkt_geometry=wkt, fid=props['id'])
+        pipe.connected_surface_area = 1
+        stormwaternetwork.add_pipe(pipe)
+
+    stormwaternetwork.accumulate_connected_surface_area()
+    
+    assert stormwaternetwork.pipes[31].accumulated_connected_surface_area == 12
+    assert stormwaternetwork.pipes[6].accumulated_connected_surface_area == 1.5
+    assert stormwaternetwork.pipes[4].accumulated_connected_surface_area == 2.5 
+    assert stormwaternetwork.pipes[3].accumulated_connected_surface_area == 1.5        
+    assert stormwaternetwork.pipes[5].accumulated_connected_surface_area == 5
 
 
 def test_calculate_max_hydraulic_gradient():
@@ -160,10 +184,28 @@ def test_evalute_max_hydraulic_gradient():
 
 
 def test_calculate_discharge():
-    pass
-
-
-
+    
+    pipes = ['LINESTRING (0 0, 1 0)']
+    pipe = Pipe(wkt_geometry = pipes[0], 
+                    fid = 1,
+                    accumulated_connected_surface_area = 1000,
+                    max_hydraulic_gradient= 0.05)
+    
+    pipe.calculate_discharge(intensity=5, timestep=300)
+    assert pipe.discharge == (5/1000/300) * 1000
+    
+def test_calculate_diameter():
+    
+    pipes = ['LINESTRING (0 0, 1 0)']
+    pipe = Pipe(wkt_geometry = pipes[0], 
+                    fid = 1,
+                    discharge=0.01,
+                    max_hydraulic_gradient= 0.05)
+    
+    # Diameter is based on colebrook white
+    pipe.calculate_diameter()
+    assert pipe.diameter == 0.5
+ 
 
 
 
