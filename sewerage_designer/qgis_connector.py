@@ -64,6 +64,7 @@ def pumping_station_from_feature(feature: QgsFeature):
         feature['storage']
     ) 
 
+'''
 def update_qgs_feature(layer, feature_id, attribute, attribute_value):
     provider = layer.dataProvider()
     updateMap = {}
@@ -73,7 +74,7 @@ def update_qgs_feature(layer, feature_id, attribute, attribute_value):
         updateMap[feature.id()] = { fieldIdx: 'a' }
 
     provider.changeAttributeValues( updateMap )    
-
+'''
 def get_feature_count(layer):
     count=layer.featureCount()
     if count>0:
@@ -159,26 +160,21 @@ def update_field(layer,feature,field,value):
     feature[field]=value
     layer.updateFeature(feature)    
 
-def network_to_layers(network,pipe_layer):
+def network_to_layers(network,layers):
     """general function that writes all
     attributes of network python object back to QGIS layers
-    first test just to pipe layer
-    first test of connected_surface_area field
-    TODO later loop over all layers and all fields
+    """
     for layer in layers:
+        fields=layer.fields().names()
         with edit(layer):
             for field in fields:
-                if field == 'some_field_we_want_change'
-                    give a list of values linked to this field, for instance network.pipes.elevation
+                if field == 'connected_surface_area':
+                    values=network.pipes.connected_surface_area
                     for feature,value in zip(get_features(layer),values):
                         update_field(pipe_layer,feature,field,value)
                 else:
+                    continue
                     #we do nothing because we don't need to update these fields
-    TODO check if list of values are same length as number of features
-    """
-    cs_areas=network.pipes.connected_surface_areas #TODO is this how this works, and is it in the same order as features from layer
-    with edit(pipe_layer):
-        for feature,value in zip(get_features(pipe_layer),cs_areas):
-            update_field(pipe_layer,feature,'connected_surface_area',value)
+    #TODO check if list of values are same length as number of features
     
 

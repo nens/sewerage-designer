@@ -51,7 +51,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
 
         self.setupUi(self)
-        self.sewerage_network = None
+        self.sewerage_network=None
         self.mQgsFileWidget_PathEmptyGeopackage.setStorageMode(3) #set to save mode
         self.mQgsFileWidget_PathEmptyGeopackage.setFilter('*.gpkg')
         self.pushButton_CreateNewGeopackage.clicked.connect(self.pushbutton_create_new_geopackage_isChecked)
@@ -98,6 +98,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     
     def get_BGT_inlooptabel(self):
         BGT_inlooptabel=self.mMapLayerComboBox_CS.currentLayer().source()
+        if "|layername" in BGT_inlooptabel: 
+            BGT_inlooptabel=BGT_inlooptabel.split("|",1)[0] #remove layername (get path before)
         return BGT_inlooptabel
     
     def get_map_layer(self,name):
@@ -130,7 +132,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def compute_CS(self):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
-        if self.sewerage_network is None:
+        if self.sewerage_network==None:
             self.sewerage_network=self.create_network_from_layers()
         try:
             bgt_inlooptabel_fn=self.get_BGT_inlooptabel()
@@ -138,17 +140,18 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             message='BGT inlooptabel not defined.'
             self.something_went_wrong_message(message)          
         bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
-        try:
-            for pipe in self.sewerage_network.pipes:
-                pipe.determine_connected_surface_area(bgt_inlooptabel)
-            self.sewerage_network.accumulate_connected_surface_area()
-            pipe_layer=self.get_map_layer('sewerage')
-            network_to_layers(self.sewerage_network,pipe_layer)
-            message='The connected surfaces are computed. You can now proceed to compute the diameters.'
-            self.finished_computation_message(message)
-        except Exception as ex:
-            message='Something went wrong: 'f"{ex}"
-            self.something_went_wrong_message(message)
+        #try:
+        for pipe in self.sewerage_network.pipes:
+            pipe.determine_connected_surface_area(bgt_inlooptabel)
+        self.sewerage_network.accumulate_connected_surface_area()
+        pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
+        layers=list(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        network_to_layers(self.sewerage_network,layers)
+        message='The connected surfaces are computed. You can now proceed to compute the diameters.'
+        self.finished_computation_message(message)
+        #except Exception as ex:
+            #message='Something went wrong: 'f"{ex}"
+            #self.something_went_wrong_message(message)
     
     def get_sewerage_designer_layers(self):
         #get and check if all required SewerageDesigner layers exist in QGIS project
@@ -167,7 +170,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             
     def create_network_from_layers(self):
         global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
-        create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        network=create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        return network
 
     def add_elevation_to_network(self):
         """If DEM dropdown changes, calculate elevation for all pipes and write back to layer"""
