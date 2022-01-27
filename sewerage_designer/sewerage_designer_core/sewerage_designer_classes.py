@@ -15,6 +15,7 @@ from .colebrook_white import ColebrookWhite
 from .utils import get_intermediates
 
 # Timestep of design rain is 5 minutes
+# Timestep of design rain is 5 minutes
 AREA_WIDE_RAIN = {
     "Bui01": [0.3, 0.6, 0.9, 1.2, 1.5, 1.5, 1.05, 0.9, 0.75, 0.6, 0.45, 0.3, 0.15, 0.15, 0.15],
     "Bui02": [0.15, 0.15, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.5, 1.5, 1.2, 0.9, 0.6, 0.3],
@@ -34,7 +35,6 @@ AREA_WIDE_RAIN = {
     # "15": [0.225694444] * 48,
     # "16": [0.277777778] * 48,
 }
-
 
 
 DESIGN_RAIN_TIMESTEP = 300
@@ -379,10 +379,20 @@ class PipeNetwork:
         self.pipes[pipe.fid] = pipe
 
         if pipe.start_coordinate not in self.network.nodes:
-            self.network.add_node(pipe.start_coordinate, type="manhole")
+            self.network.add_node(
+                pipe.start_coordinate,
+                type="manhole",
+                position=pipe.start_coordinate,
+                connected_area=0,
+            )
 
         if pipe.end_coordinate not in self.network.nodes:
-            self.network.add_node(pipe.end_coordinate, type="manhole")
+            self.network.add_node(
+                pipe.end_coordinate,
+                type="manhole",
+                position=pipe.end_coordinate,
+                connected_area=0,
+            )
 
         self.network.add_edge(
             pipe.start_coordinate,
@@ -409,7 +419,7 @@ class PipeNetwork:
         and the furthest node divided by the distance between the two
         Assign this back to all the pipes in the network
         """
-        
+
         # Get the distance dictionary for the end node
         distance_dictionary = self.distance_matrix_reversed[outlet_node][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
@@ -432,7 +442,7 @@ class PipeNetwork:
             pipe = self.get_pipe_with_edge(edge)
             start_node = edge[0]
             distance_to_weir = self.distance_to_weir(start_node)
-            
+
             hydraulic_head = (
                 self.network_downstream_hydraulic_head
                 + pipe.max_hydraulic_gradient * distance_to_weir
@@ -453,84 +463,64 @@ class PipeNetwork:
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
 
+        sink_nodes = [n for n, d in self.network.in_degree() if d == 0]
+        tank_nodes = [n for n, d in self.network.out_degree() if d == 0]
+
+        out_degree_nodes = self.network.out_degree()
+
+        # We assume that pipe flow enters at the starting node of each pipe
         for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
-            edge_attrs = {edge: {"connected_area": pipe.connected_surface_area}}
-            nx.set_edge_attributes(self.network, edge_attrs)
+            start_node = edge[0]
+            if start_node not in sink_nodes:
+                attrs = {start_node: {"connected_area": pipe.connected_surface_area + self.network.nodes[start_node]['connected_area']}}
+            else:
+                attrs = {start_node: {"connected_area": pipe.connected_surface_area}}
+            nx.set_node_attributes(self.network, attrs)  
 
-        for node in self.network.nodes:
-            attrs = {node: {"connected_area": 0, "split": 1}}
-            nx.set_node_attributes(self.network, attrs)
+        # Define recursive function used to accumulate the connected surface area
+        def get_node_output(node, completed_nodes):
+            if node in completed_nodes:
+                return completed_nodes[node]
+            else:
+                stack = self.network.predecessors(node)
+                upstream_nodes = []
+                while stack:
+                    try:
+                        in_node = next(stack)
+                        upstream_nodes += [in_node]
+                    except StopIteration:
+                        break
 
-        nodes = [n for n, d in self.network.in_degree() if d == 0]
-        visited = set()
+                node_output = self.network.nodes[node]["connected_area"]
+                for in_node in upstream_nodes:
+                    node_output += get_node_output(in_node, completed_nodes)
 
-        for node in nodes:
-            if node in visited:
-                continue
+                if out_degree_nodes[node] > 0:
+                    node_output /= out_degree_nodes[node]
 
-            stack = self.network.successors(node)
-            out_edges = []
-            # Find all edges that extend from the starting node (root)
-            while stack:
-                try:
-                    out_node = next(stack)
-                    out_edges += [(node, out_node)]
-                    nodes.extend([out_node])
-                except StopIteration:
-                    break
+                attrs = {node: {"connected_area": node_output}}
+                nx.set_node_attributes(self.network, attrs)
 
-            nr_out_edges = len(out_edges)
-            if nr_out_edges > 0:
-                for edge in out_edges:
+                completed_nodes[node] = node_output
+                return node_output
 
-                    # Determine how incoming area should be divided
-                    split = 1 / nr_out_edges
-                    in_node_connected_area = nx.get_node_attributes(
-                        self.network, "connected_area"
-                    )[edge[0]]
-                    out_node_connected_area = nx.get_node_attributes(
-                        self.network, "connected_area"
-                    )[edge[1]]
+        completed_nodes = {
+            sink: self.network.nodes[sink]["connected_area"] for sink in sink_nodes
+        }
+        for tank in tank_nodes:
+            score = get_node_output(tank, completed_nodes)
 
-                    edge_connected_surface_area = nx.get_edge_attributes(
-                        self.network, "connected_area"
-                    )[edge]
+        for node, area in completed_nodes.items():
+            node_successors = []
+            for i in self.network.successors(node):
+                node_successors += [i]
 
-                    # The total amount of connected area of the outer node
-                    # This includes the connected area that is already present on the out node
-                    new_out_node_connected_area = (
-                        edge_connected_surface_area
-                        + split * in_node_connected_area
-                        + out_node_connected_area
-                    )
-
-                    # The edge connected area does not include the area present on the out node
-                    new_edge_connected_surface_area = (
-                        edge_connected_surface_area + split * in_node_connected_area
-                    )
-
-                    out_node_attrs = {
-                        edge[1]: {
-                            "split": split,
-                            "connected_area": new_out_node_connected_area,
-                        }
-                    }
-                    nx.set_node_attributes(self.network, out_node_attrs)
-                    edge_attrs = {
-                        edge: {"connected_area": new_edge_connected_surface_area}
-                    }
-                    nx.set_edge_attributes(self.network, edge_attrs)
-
-                    pipe = self.get_pipe_with_edge(edge)
-                    pipe.accumulated_connected_surface_area = (
-                        new_edge_connected_surface_area
-                    )
-                    
-                    print(pipe.fid)
-                    print(new_edge_connected_surface_area)
-
-            visited.add(node)
+            for successor in node_successors:
+                edge = (node, successor)
+                edge_flow = self.network.nodes[node]["connected_area"]
+                pipe = self.get_pipe_with_edge(edge)
+                pipe.accumulated_connected_surface_area = edge_flow
 
     def add_id_to_nodes(self):
         """Add an incremental id to all nodes in the network"""
@@ -561,6 +551,11 @@ class PipeNetwork:
         distance_to_weir = spl[node][self.weir.coordinate]
 
         return distance_to_weir
+
+    def draw_network(self, label_attr):
+        pos = nx.get_node_attributes(self.network, "position")
+        labels = nx.get_node_attributes(self.network, label_attr)
+        nx.draw(self.network, pos, labels=labels, node_size=100)
 
     def validate_network_diameters(self):
         # TODO Walk the network and determine that there are no decreases in diameter

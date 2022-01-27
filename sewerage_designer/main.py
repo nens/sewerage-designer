@@ -5,8 +5,8 @@ from osgeo import gdal, ogr
 import networkx as nx
 import json
 
-from sewerage_designer.constants import *
-from sewerage_designer.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
+from sewerage_designer_core.constants import *
+from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
 
 if __name__ == '__main__':
 
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     #TODO Colebrook-white beschikbare diameters variabel maken
     
     # Test design to list of wkt's
-    pipe_ds = ogr.Open('./tests/test_data/test_pipes_simple_split_design_max_gradient.gpkg')
+    pipe_ds = ogr.Open('./tests/test_data/test_pipes_mesh_design_2.gpkg')
     pipe_layer = pipe_ds.GetLayer(0)
 
     # Settings
@@ -68,6 +68,15 @@ if __name__ == '__main__':
     
     # Determine connected surface areas and the max hydraulic gradient for the whole network
     stormwater_network.accumulate_connected_surface_area()
+    
+    stormwater_network.draw_network('connected_area')
+    
+    #stormwater_network.draw_network('connected_area')
+    for pipe in stormwater_network.pipes.values():
+        print(pipe.fid)
+        print(pipe.accumulated_connected_surface_area)
+    
+    
     stormwater_network.calculate_max_hydraulic_gradient(weir.coordinate, waking=waking)
     stormwater_network.evaluate_hydraulic_gradient_upstream(waking=waking)
 
@@ -82,79 +91,128 @@ if __name__ == '__main__':
     # Determine the depth for all pipes
     stormwater_network.check_required_cover_depth()
 
+    #### Recursive method
 
-    pipe= stormwater_network.pipes[30]
-    node = (pipe.start_coordinate)
+    # Define sink and tank nodes   
+    
+    
+    sink_nodes = [n for n, d in stormwater_network.network.in_degree() if d == 0]
+    tank_nodes = [n for n, d in stormwater_network.network.out_degree() if d == 0]
+    
+    out_degree_nodes = stormwater_network.network.out_degree()
+    in_degree_nodes = stormwater_network.network.in_degree()
+    
+    for node in stormwater_network.network.nodes:
+        attrs = {node: {"connected_area":100}}
+        nx.set_node_attributes(stormwater_network.network, attrs)
+            
 
-    visited = set()
-    nodes = [stormwater_network.weir.coordinate]
-    stormwater_network.distance_matrix_reversed[weir.coordinate][0][-1]
+    def get_score(node, ready_nodes):
+        if node in ready_nodes:
+            return ready_nodes[node]
+        else:
+            stack = stormwater_network.network.predecessors(node)
+            upstream_nodes = []
+            while stack:
+                try:
+                    in_node = next(stack)
+                    upstream_nodes += [in_node]
+                except StopIteration:
+                    break
+            
+            #nx.get_node_attributes(stormwater_network.network,'connected_area')[node]
+            node_output = stormwater_network.network.nodes[node]['connected_area']
+            for in_node in upstream_nodes:
+                node_output += get_score(in_node, ready_nodes)
+    
+            if out_degree_nodes[node] > 0:
+                node_output /= out_degree_nodes[node]
 
-    for node in nodes:
-                
-        if node in visited:
-            continue
+            attrs = {node: {'connected_area': node_output}}
+            nx.set_node_attributes(stormwater_network.network, attrs)
 
+            ready_nodes[node] = node_output
+            return node_output
+        
+    
+    # set all starting flows to 1
+    ready_nodes = {sink: 100 for sink in sink_nodes}
+    for tank in tank_nodes:
+        score = get_score(tank, ready_nodes)
+        
+    pos = nx.get_node_attributes(stormwater_network.network,'position')
+    labels = nx.get_node_attributes(stormwater_network.network, 'connected_area') 
+    nx.draw(stormwater_network.network,pos,labels=labels,node_size=100)
+    
+    for node, area in ready_nodes.items():
+        node_successors = []
+        for succesor_node in stormwater_network.network.successors(node):
+            node_successors += [node]
+            
+        for successor in node_successors:
+            edge = (node, successor)
+            edge_flow = stormwater_network.network.nodes[node]['connected_area']
+            pipe = stormwater_network.get_pipe_with_edge(edge)
+            pipe.accumulated_connected_surface_area = edge_flow
+        
+        downstream = [n for n in nx.traversal.bfs_tree(stormwater_network.network, node) if n != 2]
+        break
+        
+    
 
+    ## Cumulative method
 
-        # Get the distance dictionary for the end node
-        distance_dictionary = stormwater_network.distance_matrix_reversed[node][0]
-        furthest_node, distance = list(distance_dictionary.items())[-1]
-        furthest_edge = list(stormwater_network.network.edges(furthest_node))[0]
-        # Get start elevation + waking for this edge 
-        # Calculate hydraulic gradient
-        hydraulic_gradient = 0.07
+    for node in stormwater_network.network.nodes:
+        if out_degree_nodes[node] > 1:
+            attrs = attrs = {node: {"flow_split_frac": 1/out_degree_nodes[node]}}
+        else:
+            attrs = {node: {"flow_split_frac": 1}}
+        nx.set_node_attributes(stormwater_network.network, attrs)
         
-        # Assign hydraulic head to nodes along the path
-        path_nodes = list(distance_dictionary.keys())
-        for i in range(0, len(distance_dictionary.keys())-1):
-            path_edge = (path_nodes[i+1],path_nodes[i])
-            edge_hydraulic_gradient = 0.07
-            # Evaluate hydraulic gradient with lowest surface level
-            if edge_hydraulic_gradient is not None:
-                # if new hydraulic gradient > current hydraulic gradient
-                pass
-            else:
-                # new hydraulic gradient
-                pass
-                
-        # Find where to continue
-        stack = stormwater_network.network.predecessors(node)
-        out_edges = []
-        while stack:
-            try:
-                out_node = next(stack)
-                out_edges += [(node, out_node)] 
-                nodes.extend([out_node])
-            except StopIteration:
-                break
+
+    def accumulate_downstream(G, accum_attr, cumu_attr_name=None,
+                              split_attr='flow_split_frac'):
+        """
+        pass through the graph from upstream to downstream and accumulate the value
+        an attribute found in nodes and edges, and assign the accumulated value
+        as a new attribute in each node and edge.
+        Where there's a flow split, apply an optional split fraction to
+        coded in the upstream edge.
+        """
+        G1 = G.copy()
+    
+        if cumu_attr_name is None:
+            cumu_attr_name = 'accumulated_{}'.format(accum_attr)
+    
+        for n in nx.topological_sort(G1):
+    
+            # grab value in current node
+            attrib_val = G1.nodes[n].get(accum_attr, 0)
+    
+            # sum with cumulative values in upstream nodes and edges
+            for p in G1.predecessors(n):
+                # add cumulative attribute val in upstream node, apply flow split fraction
+                attrib_val += G1.nodes[p][cumu_attr_name] * G1[p][n].get(split_attr, 1)
+    
+                # add area routed directly to upstream edge/sewer
+                attrib_val += G1[p][n].get(accum_attr, 0)
+    
+                # store cumulative value in upstream edge
+                G1[p][n][cumu_attr_name] = attrib_val
+    
+            # store cumulative attribute value in current node
+            G1.nodes[n][cumu_attr_name] = attrib_val
+    
+        return G1
+    
+    accumulated_graph = accumulate_downstream(stormwater_network.network, accum_attr='connected_area')
         
-        # Visited nodes
-        visited.add(node)
+    for node in stormwater_network.network.nodes:
+        attrs = {node: {"pos": node}}
+        nx.set_node_attributes(stormwater_network.network, attrs)
         
-        
-        
-        
-        nr_out_edges = len(out_edges)
-        if nr_out_edges > 0:
-            for edge in out_edges:
-                split = 1 / nr_out_edges
-                in_node_connected_area = nx.get_node_attributes(stormwater_network.network, 'connected_area')[edge[0]]
-                out_node_connected_area = nx.get_node_attributes(stormwater_network.network, 'connected_area')[edge[1]]
-                in_node_split = nx.get_node_attributes(stormwater_network.network, 'split')[edge[0]]
-                 
-                edge_connected_surface_area = nx.get_edge_attributes(stormwater_network.network, 'connected_area')[edge]
-                edge_id = nx.get_edge_attributes(stormwater_network.network, 'fid')[edge]
-                new_out_node_connected_area = edge_connected_surface_area + split * in_node_connected_area + out_node_connected_area
-                new_edge_connected_surface_area = edge_connected_surface_area + split * in_node_connected_area
-                
-                out_node_attrs = {edge[1]: {'split':split, 'connected_area':new_out_node_connected_area}}
-                nx.set_node_attributes(stormwater_network.network, out_node_attrs)
-                
-                edge_attrs = {edge: {'connected_area': new_edge_connected_surface_area}}
-                nx.set_edge_attributes(stormwater_network.network, edge_attrs)
-                print(edge_id)
-                print(edge_attrs)
-                
-        visited.add(node)
-        
+    pos = nx.get_node_attributes(accumulated_graph,'pos')
+    labels = nx.get_node_attributes(accumulated_graph, 'cumulative_connected_area') 
+    nx.draw(accumulated_graph,pos,labels=labels,node_size=100)
+
+            
