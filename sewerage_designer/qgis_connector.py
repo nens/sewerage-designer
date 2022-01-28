@@ -1,5 +1,6 @@
 from osgeo import ogr,gdal
 from qgis.core import QgsFeature, QgsVectorLayer
+from qgis.core.additions.edit import edit
 
 from sewerage_designer_core.sewerage_designer_classes import Pipe,Outlet,Weir,PumpingStation,StormWaterPipeNetwork,WasteWaterPipeNetwork
 from sewerage_designer_core.constants import *
@@ -12,27 +13,28 @@ class SewerageDesignerQgsConnector:
 
 def pipe_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
-
+           
     return Pipe(
-        wkb_geometry,
-        feature['diameter'],
-        feature['start_level'],
-        feature['end_level'],
-        feature['material'],
-        feature['connected_surface_area'],
-        feature['sewerage_type'],
-        feature['cover_depth'],
-        feature['discharge'],
-        feature['velocity'],
-        feature['hydraulic_gradient'],
-        feature['max_hydraulic_gradient']
-    )
+        wkt_geometry=wkt_geometry,
+        fid=feature['fid'],
+        diameter=feature['diameter'],
+        start_level=feature['start_level'],
+        end_level=feature['end_level'],
+        material=feature['material'],
+        connected_surface_area=feature['connected_surface_area'],
+        accumulated_connected_surface_area=feature['accumulated_connected_surface_area'],
+        max_hydraulic_gradient=feature['max_hydraulic_gradient'],
+        sewerage_type=feature['sewerage_type'],
+        cover_depth=feature['cover_depth'],
+        discharge=feature['discharge'],
+        velocity=feature['velocity']
+        )
 
 def outlet_from_feature(feature: QgsFeature):
-    wkb_geometry = feature.geometry().asWkb()
+    wkt_geometry = feature.geometry().asWkt()
 
     return Outlet(
-        wkb_geometry,
+        wkt_geometry,
         feature['fid'],
         feature['pipe_in_id'],
         feature['ditch_level'],
@@ -134,6 +136,7 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
     else:
         raise ValueError('Invalid sewerage type')
     
+    pipe_features=get_features(pipe_layer)
     for feature in pipe_features:
         pipe = pipe_from_feature(feature)
         network.add_pipe(pipe)
@@ -165,23 +168,38 @@ def network_to_layers(network,layers):
     attributes of network python object back to QGIS layers
     """
     for layer in layers:
-        fields=layer.fields().names()
-        with edit(layer):
-            for field in fields:
-                if field=='connected_surface_area':
-                    values=network.pipes.connected_surface_area
-                    for feature,value in zip(get_features(layer),values):
-                        update_field(pipe_layer,feature,field,value)
-                elif field=='elevation':
-                    values=network.pipes.sample_elevation_model
-                    for feature,value in zip(get_features(layer),values):
-                        update_field(pipe_layer,feature,field,value)
-                elif field=='hydraulic_gradient':
-                    values=network.pipes.hydraulic_gradient
-                    for feature,value in zip(get_features(layer),values):
-                        update_field(pipe_layer,feature,field,value)
-                else:
-                    continue
+        if layer.name() == 'sewerage':
+            fields=layer.fields().names()
+            with edit(layer):
+                for field in fields:
+                    if field=='connected_surface_area':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.connected_surface_area)
+                    elif field=='accumulated_connected_surface_area':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.accumulated_connected_surface_area)                    
+                    elif field=='elevation':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.elevation)
+                    elif field=='max_hydraulic_gradient':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.max_hydraulic_gradient)
+                    else:
+                        continue
+        else:
+            print(layer.name())
                     #we do nothing because we don't need to update these fields
     #TODO check if list of values are same length as number of features
     
