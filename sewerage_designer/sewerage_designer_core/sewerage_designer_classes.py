@@ -325,7 +325,7 @@ class Pipe:
 
         material_thickness = MATERIAL_THICKNESS[self.material]
         minimum_cover_depth = self.lowest_elevation - (
-            minimal_cover_depth + self.diameter + material_thickness * 2
+            minimal_cover_depth + self.diameter + material_thickness *2
         )
         self.minimum_cover_depth = minimum_cover_depth
 
@@ -474,12 +474,12 @@ class PipeNetwork:
         # We assume that pipe flow enters at the starting node of each pipe
         for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
-            start_node = edge[0]
-            if start_node not in sink_nodes:
-                attrs = {start_node: {"connected_area": pipe.connected_surface_area + self.network.nodes[start_node]['connected_area']}}
-            else:
-                attrs = {start_node: {"connected_area": pipe.connected_surface_area}}
+            end_node = edge[1]
+            attrs = {end_node: {"connected_area": pipe.connected_surface_area + self.network.nodes[end_node]['connected_area']}}
             nx.set_node_attributes(self.network, attrs)  
+            edge_attrs = {edge:{'connected_surface_area':pipe.connected_surface_area}}
+            nx.set_edge_attributes(self.network, edge_attrs)
+
 
         # Define recursive function used to accumulate the connected surface area
         def get_node_output(node, completed_nodes):
@@ -521,7 +521,7 @@ class PipeNetwork:
 
             for successor in node_successors:
                 edge = (node, successor)
-                edge_flow = self.network.nodes[node]["connected_area"]
+                edge_flow = self.network.nodes[node]["connected_area"] + self.network.edges[edge]['connected_surface_area']
                 attrs = {edge:{'accumulated_connected_area':edge_flow}}
                 nx.set_edge_attributes(self.network, attrs)
                 pipe = self.get_pipe_with_edge(edge)
