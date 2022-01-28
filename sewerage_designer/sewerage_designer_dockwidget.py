@@ -177,8 +177,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             self.something_went_wrong_message(message)          
         bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
         #try:
-        for pipe in self.sewerage_network.pipes:
+        for pipe in self.sewerage_network.pipes.values():
+            print(pipe)
             pipe.determine_connected_surface_area(bgt_inlooptabel)
+            
         self.sewerage_network.accumulate_connected_surface_area()
         layers_list=self.get_list_of_sewerage_designer_layers()
         network_to_layers(self.sewerage_network,layers_list)
