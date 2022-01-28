@@ -146,7 +146,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     
     def get_list_of_sewerage_designer_layers(self):
         global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
-        return list(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        list_of_layers=[pipe_layer,weir_layer,pumping_station_layer,outlet_layer]
+        return list_of_layers
             
     def create_network_from_layers(self):
         global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
@@ -168,8 +169,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def compute_CS(self):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
-        if self.sewerage_network==None:
+        if self.sewerage_network is None:
             self.sewerage_network=self.create_network_from_layers()
+        for node in self.sewerage_network.network.nodes:
+            print(self.sewerage_network.network.nodes[node])
         try:
             bgt_inlooptabel_fn=self.get_BGT_inlooptabel()
         except:
@@ -178,8 +181,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
         #try:
         for pipe in self.sewerage_network.pipes.values():
-            print(pipe)
             pipe.determine_connected_surface_area(bgt_inlooptabel)
+            print(pipe.connected_surface_area)
             
         self.sewerage_network.accumulate_connected_surface_area()
         layers_list=self.get_list_of_sewerage_designer_layers()
@@ -192,6 +195,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
 
     def read_attribute_values(self,layer,field):
         "return alls attribute values of a certain field of certain layer"
+        values=[]
         for feature in layer.getFeatures():
             values.append(feature[field])
         return values
@@ -204,9 +208,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         
         DEM=self.get_DEM()
         self.sewerage_network.add_elevation_to_network(DEM)
-        weir_coordinate=self.sewerage_network.weir.coordinate
+        weir=self.sewerage_network.weir
         global_settings_layer=self.get_map_layer('global_settings')
-        minimum_freeboard=self.read_attribute_value(global_settings_layer,'minimum_freeboard')[0]
+        minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
+        
+        print(self.sewerage_network.network.nodes)
         self.sewerage_network.calculate_max_hydraulic_gradient(weir.coordinate,waking=minimum_freeboard)
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         
