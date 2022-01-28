@@ -1,4 +1,4 @@
-from osgeo import ogr
+from osgeo import ogr,gdal
 from qgis.core import QgsFeature, QgsVectorLayer
 
 from sewerage_designer_core.sewerage_designer_classes import Pipe,Outlet,Weir,PumpingStation,StormWaterPipeNetwork,WasteWaterPipeNetwork
@@ -158,7 +158,7 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
 
 def update_field(layer,feature,field,value):
     feature[field]=value
-    layer.updateFeature(feature)    
+    layer.updateFeature(feature)
 
 def network_to_layers(network,layers):
     """general function that writes all
@@ -168,8 +168,16 @@ def network_to_layers(network,layers):
         fields=layer.fields().names()
         with edit(layer):
             for field in fields:
-                if field == 'connected_surface_area':
+                if field=='connected_surface_area':
                     values=network.pipes.connected_surface_area
+                    for feature,value in zip(get_features(layer),values):
+                        update_field(pipe_layer,feature,field,value)
+                elif field=='elevation':
+                    values=network.pipes.sample_elevation_model
+                    for feature,value in zip(get_features(layer),values):
+                        update_field(pipe_layer,feature,field,value)
+                elif field=='hydraulic_gradient':
+                    values=network.pipes.hydraulic_gradient
                     for feature,value in zip(get_features(layer),values):
                         update_field(pipe_layer,feature,field,value)
                 else:

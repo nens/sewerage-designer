@@ -81,7 +81,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         else:
             QgsProject.instance().addMapLayer(vlayer,False)
             group.addLayer(vlayer)
-	
+
     def get_geopackage_save_path(self):
         path=self.mQgsFileWidget_PathEmptyGeopackage.filePath()
         if not path.endswith('.gpkg'):
@@ -122,12 +122,48 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
           
     def copy(self,source,dest):
     	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
-
+        
     def finished_computation_message(self,message):
         QtWidgets.QMessageBox.about(self,"Computation finished",message)
         
     def something_went_wrong_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Something went wrong",message)
+        QtWidgets.QMessageBox.about(self,"Something went wrong",message)        
+
+    def get_sewerage_designer_layers(self):
+        #get and check if all required SewerageDesigner layers exist in QGIS project
+        #for now layer needs to exist in gpkg, can possibly be empty dependent on sewerage type
+        #see create_network_from_layers
+        try:
+            global_settings_layer=self.get_map_layer('global_settings')
+            pipe_layer=self.get_map_layer('sewerage')
+            weir_layer=self.get_map_layer('weir')
+            pumping_station_layer=self.get_map_layer('pumping_station')
+            outlet_layer=self.get_map_layer('outlet')
+        except:
+            message='Your sewerage design is not complete, some layers are missing. Please re-load your design.'
+            self.something_went_wrong_message(message)
+        return global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer
+    
+    def get_list_of_sewerage_designer_layers(self):
+        global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
+        return list(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+            
+    def create_network_from_layers(self):
+        global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
+        network=create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        return network
+            
+    def check_input(self):
+        response=QtWidgets.QMessageBox.Yes #by definition if not changed
+        intensity=self.get_final_peak_intensity_from_lineedit()
+        check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        if not intensity==check_intensity:
+            response=QtWidgets.QMessageBox.question(self,'Warning',('Peak intensity 'f"{intensity}"' mm/5min '
+                                                        'does not match the peak intensity of the '
+                                                        'design event. Want to continue?'),
+                                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                                                    QtWidgets.QMessageBox.Cancel)
+        return response
 
     def compute_CS(self):
         """Create a pipe network and calculate the connected surfaces
@@ -144,96 +180,57 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         for pipe in self.sewerage_network.pipes:
             pipe.determine_connected_surface_area(bgt_inlooptabel)
         self.sewerage_network.accumulate_connected_surface_area()
-        pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
-        layers=list(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
-        network_to_layers(self.sewerage_network,layers)
+        layers_list=self.get_list_of_sewerage_designer_layers()
+        network_to_layers(self.sewerage_network,layers_list)
         message='The connected surfaces are computed. You can now proceed to compute the diameters.'
         self.finished_computation_message(message)
         #except Exception as ex:
             #message='Something went wrong: 'f"{ex}"
             #self.something_went_wrong_message(message)
-    
-    def get_sewerage_designer_layers(self):
-        #get and check if all required SewerageDesigner layers exist in QGIS project
-        #for now layer needs to exist in gpkg, can possibly be empty dependent on sewerage type
-        #see create_network_from_layers
-        try:
-            global_settings_layer=self.get_map_layer('global_settings')
-            pipe_layer=self.get_map_layer('sewerage')
-            weir_layer=self.get_map_layer('weir')
-            pumping_station_layer=self.get_map_layer('pumping_station')
-            outlet_layer=self.get_map_layer('outlet')
-        except:
-            message='Your sewerage design is not complete, some layers are missing. Please re-load your design.'
-            self.something_went_wrong_message(message)
-        return global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer
-            
-    def create_network_from_layers(self):
-        global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
-        network=create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
-        return network
 
-    def add_elevation_to_network(self):
-        """If DEM dropdown changes, calculate elevation for all pipes and write back to layer"""
-            
-        dem = self.dockwidget.get_DEM()
-        dem_datasource = gdal.Open(dem)
-        dem_rasterband = dem_datasource.GetRasterBand(1)
-        dem_geotransform = dem_datasource.GetGeoTransform()
-        for pipe in self.network.pipes.items():
-            pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
-
-        # TODO write output back to qgis layers
-        #network_to_layers(self.sewerage_network)
+    def read_attribute_values(self,layer,field):
+        "return alls attribute values of a certain field of certain layer"
+        for feature in layer.getFeatures():
+            values.append(feature[field])
+        return values
 
     def compute_diameters(self):
         """Compute diameters for the current network and design rainfall event"""
-        
+        #TODO
         if self.sewerage_network is None:
-            self.sewerage_network = create_network_from_layers()
-       
-        weir_coordinate = self.sewerage_network.weir.coordinate
-        self.sewerage_network.calculate_max_hydraulic_gradient(weir.coordinate, waking=waking)
-        self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=waking)
-
+            self.sewerage_network=self.create_network_from_layers()
+        
+        DEM=self.get_DEM()
+        self.sewerage_network.add_elevation_to_network(DEM)
+        weir_coordinate=self.sewerage_network.weir.coordinate
+        global_settings_layer=self.get_map_layer('global_settings')
+        minimum_freeboard=self.read_attribute_value(global_settings_layer,'minimum_freeboard')[0]
+        self.sewerage_network.calculate_max_hydraulic_gradient(weir.coordinate,waking=minimum_freeboard)
+        self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
+        
+        self.sewerage_network.calculate_discharge()
+        self.sewerage_network.calculate_diameter()
+        
+        layers_list=self.get_list_of_sewerage_designer_layers()
+        network_to_layers(self.sewerage_network,layers_list)
+        message='The diameters are computed. You can now proceed to validate/ compute the depths.'
+        self.finished_computation_message(message)
+        
     def validate_depths(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
         if self.sewerage_network is None:
-            self.sewerage_network = create_network_from_layers()
-            
-    def check_input(self):
-        response=QtWidgets.QMessageBox.Yes #by definition if not changed
-        intensity=self.get_final_peak_intensity_from_lineedit()
-        check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
-        if not intensity==check_intensity:
-            response=QtWidgets.QMessageBox.question(self,'Warning',('Peak intensity 'f"{intensity}"' mm/5min '
-                                                        'does not match the peak intensity of the '
-                                                        'design event. Want to continue?'),
-                                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
-                                                    QtWidgets.QMessageBox.Cancel)
-        return response
-
-    def compute_diameters(self):
-        #TODO
-        try:
-            DEM=self.get_DEM()
-            hoofdfunctie_die_diameters_berekent(DEM) #TODO
-            message='The diameters are computed. You can now proceed to validate/ compute the depths.'
-            self.finished_computation_message(message)
-        except Exception as ex:
-            message='Something went wrong: 'f"{ex}"
-            self.something_went_wrong_message(message)
+            self.sewerage_network=self.create_network_from_layers()
 
     def compute_depths(self):
         #TODO
-        try:
-            DEM=self.get_DEM()
-            hoofdfunctie_die_depths_berekent(DEM) #TODO
-            message='The depths are validated/ computed.'
-            self.finished_computation_message(message)
-        except Exception as ex:
-            message='Something went wrong: 'f"{ex}"
-            self.something_went_wrong_message(message)        
+        #try:
+        DEM=self.get_DEM()
+        hoofdfunctie_die_depths_berekent(DEM) #TODO
+        message='The depths are validated/ computed.'
+        self.finished_computation_message(message)
+        #except Exception as ex:
+            #message='Something went wrong: 'f"{ex}"
+            #self.something_went_wrong_message(message)        
     		   	
     def pushbutton_create_new_geopackage_isChecked(self):
         dest=self.get_geopackage_save_path()     
