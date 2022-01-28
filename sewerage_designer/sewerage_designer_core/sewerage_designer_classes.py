@@ -415,6 +415,18 @@ class PipeNetwork:
             attr = {weir.coordinate: {"type": "weir"}}
             nx.set_node_attributes(self.network, attr)
 
+    def add_elevation_to_network(self, dem_filename : str):
+        """Add elevation to all pipes in the network"""
+        
+        dem_datasource = gdal.Open(dem_filename)
+        dem_rasterband = dem_datasource.GetRasterBand(1)
+        dem_geotransform = dem_datasource.GetGeoTransform()
+        
+        for pipe in self.pipes.items():
+            pipe.sample_elevation_model(dem_rasterband=dem_rasterband, 
+                                        dem_geotransform=dem_geotransform)
+        
+        
     def calculate_max_hydraulic_gradient(self, outlet_node, waking):
         """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation

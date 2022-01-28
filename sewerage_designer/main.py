@@ -35,10 +35,10 @@ if __name__ == '__main__':
         pipe = Pipe(wkt_geometry=wkt, 
                     fid=props['id'],
                     sewerage_type=props['sewerage_type'])
-        pipe.connected_surface_area = 100
+        pipe.connected_surface_area = 1
         pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
         stormwater_network.add_pipe(pipe)
-
+        
     stormwater_network.add_id_to_nodes()
     
     # Add an weir
@@ -71,8 +71,11 @@ if __name__ == '__main__':
     stormwater_network.check_invert_levels()
     
     # Draw network with a property
-    stormwater_network.accumulate_connected_surface_area()
-    stormwater_network.draw_network(node_label_attr='id', edge_label_attr='connected_surface_area')
+    stormwater_network.draw_network(node_label_attr='id', edge_label_attr='diameter')
+    
+    # Discharge check
+
+    
     
     
     

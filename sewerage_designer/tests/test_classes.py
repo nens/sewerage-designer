@@ -131,6 +131,33 @@ def test_network_connected_surface_area_mesh_network_2():
     assert stormwaternetwork.pipes[5].accumulated_connected_surface_area == 5
 
 
+def test_network_connected_surface_area_mesh_network_2_variable_connected_area():
+    """Test aggregated surface areas along the network, for a meshed network"""
+
+    pipe_fn = TEST_DIRECTORY / 'test_pipes_mesh_design_2.gpkg'
+    pipe_ds = ogr.Open(str(pipe_fn))
+    pipe_layer = pipe_ds.GetLayer(0)
+    stormwaternetwork = StormWaterPipeNetwork()
+
+    for i, feature in enumerate(pipe_layer):
+        props = json.loads(feature.ExportToJson())['properties']
+        geom = feature.GetGeometryRef()
+        wkt = geom.ExportToWkt()
+        pipe = Pipe(wkt_geometry=wkt, fid=props['id'])
+        pipe.connected_surface_area = 1
+        stormwaternetwork.add_pipe(pipe)
+
+    
+    stormwaternetwork.pipes[6].connected_surface_area = 2
+    stormwaternetwork.pipes[7].connected_surface_area = 4
+
+    stormwaternetwork.accumulate_connected_surface_area()
+    
+    assert stormwaternetwork.pipes[31].accumulated_connected_surface_area == 16
+    assert stormwaternetwork.pipes[6].accumulated_connected_surface_area == 2.5
+    assert stormwaternetwork.pipes[7].accumulated_connected_surface_area == 4.5
+
+
 def test_calculate_max_hydraulic_gradient():
 
     pipes = ['LINESTRING (0 0, 1 0)',
