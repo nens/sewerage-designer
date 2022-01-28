@@ -429,7 +429,7 @@ class PipeNetwork:
                                         dem_geotransform=dem_geotransform)
         
         
-    def calculate_max_hydraulic_gradient(self, outlet_node, waking : float):
+    def calculate_max_hydraulic_gradient(self, waking : float):
         """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation
         The max hydraulic gradient is defined as the maximum difference in elevation between the endpoint of the network
@@ -438,7 +438,8 @@ class PipeNetwork:
         """
 
         # Get the distance dictionary for the end node
-        distance_dictionary = self.distance_matrix_reversed[outlet_node][0]
+        weir_coordinate = (round(self.weir.coordinate[0]), round(self.weir.coordinate[1]))
+        distance_dictionary = self.distance_matrix_reversed[weir_coordinate][0]
         furthest_node, distance = list(distance_dictionary.items())[-1]
         furthest_edge = list(self.network.edges(furthest_node))[0]
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
