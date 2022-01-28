@@ -422,7 +422,7 @@ class PipeNetwork:
         dem_rasterband = dem_datasource.GetRasterBand(1)
         dem_geotransform = dem_datasource.GetGeoTransform()
         
-        for pipe in self.pipes.items():
+        for pipe in self.pipes.values():
             pipe.sample_elevation_model(dem_rasterband=dem_rasterband, 
                                         dem_geotransform=dem_geotransform)
         
