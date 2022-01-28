@@ -383,7 +383,7 @@ class PipeNetwork:
 
         if pipe.start_coordinate not in self.network.nodes:
             self.network.add_node(
-                pipe.start_coordinate,
+                (round(pipe.start_coordinate[0]), round(pipe.start_coordinate[1])),
                 type="manhole",
                 position=pipe.start_coordinate,
                 connected_area=0,
@@ -391,7 +391,7 @@ class PipeNetwork:
 
         if pipe.end_coordinate not in self.network.nodes:
             self.network.add_node(
-                pipe.end_coordinate,
+                (round(pipe.end_coordinate[0]), round(pipe.end_coordinate[1])),
                 type="manhole",
                 position=pipe.end_coordinate,
                 connected_area=0,
@@ -410,7 +410,9 @@ class PipeNetwork:
 
         # Add the node to the network, if the node is already present change it's type
         if weir.coordinate not in self.network.nodes:
-            self.network.add_node(weir.coordinate, type="weir")
+            self.network.add_node((round(weir.coordinate[0]), 
+                                   round(weir.coordinate[1])), 
+                                   type="weir")
         else:
             attr = {weir.coordinate: {"type": "weir"}}
             nx.set_node_attributes(self.network, attr)
@@ -427,7 +429,7 @@ class PipeNetwork:
                                         dem_geotransform=dem_geotransform)
         
         
-    def calculate_max_hydraulic_gradient(self, outlet_node, waking):
+    def calculate_max_hydraulic_gradient(self, outlet_node, waking : float):
         """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation
         The max hydraulic gradient is defined as the maximum difference in elevation between the endpoint of the network
