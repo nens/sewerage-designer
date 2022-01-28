@@ -398,8 +398,8 @@ class PipeNetwork:
             )
 
         self.network.add_edge(
-            pipe.start_coordinate,
-            pipe.end_coordinate,
+            round(pipe.start_coordinate[0]),
+            round(pipe.end_coordinate[0]),
             fid=pipe.fid,
             length=pipe.geometry.Length(),
         )
@@ -409,12 +409,12 @@ class PipeNetwork:
         self.weir = weir
 
         # Add the node to the network, if the node is already present change it's type
-        if weir.coordinate not in self.network.nodes:
-            self.network.add_node((round(weir.coordinate[0]), 
-                                   round(weir.coordinate[1])), 
-                                   type="weir")
+        weir_coordinate = (round(weir.coordinate[0]),round(weir.coordinate[1]))
+        if weir_coordinate not in self.network.nodes:
+            self.network.add_node(weir_coordinate, 
+                                  type="weir")
         else:
-            attr = {weir.coordinate: {"type": "weir"}}
+            attr = {weir_coordinate: {"type": "weir"}}
             nx.set_node_attributes(self.network, attr)
 
     def add_elevation_to_network(self, dem_filename : str):
