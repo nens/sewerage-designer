@@ -51,7 +51,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
 
         self.setupUi(self)
-        self.sewerage_network=None
+        self.sewerage_network=None        
         self.mQgsFileWidget_PathEmptyGeopackage.setStorageMode(3) #set to save mode
         self.mQgsFileWidget_PathEmptyGeopackage.setFilter('*.gpkg')
         self.pushButton_CreateNewGeopackage.clicked.connect(self.pushbutton_create_new_geopackage_isChecked)
@@ -91,6 +91,12 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def get_geopackage_load_path(self):
         path=self.mQgsFileWidget_PathGeopackage.filePath()
         return path
+    
+    def set_geopackage_load_path_if_group_in_project(self):
+        path=self.get_map_layer('sewerage').source()
+        if "|layername" in path: 
+            path=path.split("|",1)[0] #remove layername (get path before)
+        self.mQgsFileWidget_PathGeopackage.setFilePath(path)
     
     def get_DEM(self):
         path=self.mMapLayerComboBox_DEM.currentLayer().source()
@@ -253,16 +259,19 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             self.add_layer_to_group(dest,layername,group)
         
     def pushbutton_load_geopackage_isChecked(self):
-        gpkg=self.get_geopackage_load_path()
-        if gpkg=='':
-            message='Please define filepath'
-            self.something_went_wrong_message(message) 
-            raise ValueError('No path defined')
-        layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
-        group_name='Sewerage Designer'
-        group=self.add_group(group_name) 
-        for layername in layernames:
-            self.add_layer_to_group(gpkg,layername,group)
+        if QgsProject.instance().layerTreeRoot().findGroup('Sewerage Designer') != None:
+            self.set_geopackage_load_path_if_group_in_project()
+        else:
+            gpkg=self.get_geopackage_load_path()
+            if gpkg=='':
+                message='Please define filepath'
+                self.something_went_wrong_message(message) 
+                raise ValueError('No path defined')
+            layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
+            group_name='Sewerage Designer'
+            group=self.add_group(group_name) 
+            for layername in layernames:
+                self.add_layer_to_group(gpkg,layername,group)
            
     def pushbutton_computeCS_isChecked(self):
         self.compute_CS()
