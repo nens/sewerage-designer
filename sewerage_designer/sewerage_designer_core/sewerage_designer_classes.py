@@ -412,9 +412,10 @@ class PipeNetwork:
         weir_coordinate = (round(weir.coordinate[0]),round(weir.coordinate[1]))
         if weir_coordinate not in self.network.nodes:
             self.network.add_node(weir_coordinate, 
-                                  type="weir")
+                                  type="weir",
+                                 connected_area=0)
         else:
-            attr = {weir_coordinate: {"type": "weir"}}
+            attr = {weir_coordinate: {"type": "weir", "connected_area":0}}
             nx.set_node_attributes(self.network, attr)
 
     def add_elevation_to_network(self, dem_filename : str):
