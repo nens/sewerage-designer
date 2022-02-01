@@ -25,6 +25,7 @@
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
+from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsMapLayerProxyModel
@@ -110,6 +111,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     
     def get_map_layer(self,name):
         layer=QgsProject.instance().mapLayersByName(name)[0]
+        if layer.isEditable():
+            iface.actionToggleEditing().trigger()
         return layer
            
     def get_peak_intensity_design_event(self,AREA_WIDE_RAIN):
