@@ -139,20 +139,16 @@ class Weir:
         wkt_geometry,
         fid: int = None,
         weir_level: float = None,
-        surface_elevation: float = None,
         freeboard: float = None,
         pipe_in_id: int = None,
         pipe_out_id: int = None,
-        hydraulic_head: float = None,
     ):
         self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.weir_level = weir_level
         self.fid = fid
-        self.surface_elevation = surface_elevation
         self.freeboard = freeboard
         self.pipe_in_id = pipe_in_id
         self.pipe_out_id = pipe_out_id
-        self.hydraulic_head = hydraulic_head
 
     @property
     def wkt_geometry(self):
@@ -410,6 +406,7 @@ class PipeNetwork:
 
         # Add the node to the network, if the node is already present change it's type
         weir_coordinate = (round(weir.coordinate[0]),round(weir.coordinate[1]))
+        self.weir_coordinate = weir_coordinate
         if weir_coordinate not in self.network.nodes:
             self.network.add_node(weir_coordinate, 
                                   type="weir",
@@ -569,7 +566,7 @@ class PipeNetwork:
         """Get the distance to the outlet from a node in the network"""
 
         spl = dict(nx.all_pairs_shortest_path_length(self.network))
-        distance_to_weir = spl[node][self.weir.coordinate]
+        distance_to_weir = spl[node][self.weir_coordinate]
 
         return distance_to_weir
 

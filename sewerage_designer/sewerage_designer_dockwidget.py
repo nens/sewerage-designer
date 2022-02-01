@@ -221,12 +221,16 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
         print(minimum_freeboard);print(type(self.sewerage_network.weir.weir_level))
-        self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard[0])
+        self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         
-        self.sewerage_network.calculate_discharge()
-        self.sewerage_network.calculate_diameter()
-        
+        peak_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        for pipe_id, pipe in self.sewerage_network.pipes.items():
+            pipe.calculate_discharge(intensity=peak_intensity, timestep = 300)
+            pipe.calculate_diameter()
+            pipe.set_material()
+            print(pipe)
+            
         layers_list=self.get_list_of_sewerage_designer_layers()
         network_to_layers(self.sewerage_network,layers_list)
         message='The diameters are computed. You can now proceed to validate/ compute the depths.'
