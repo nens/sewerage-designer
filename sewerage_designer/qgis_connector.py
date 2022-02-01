@@ -15,55 +15,55 @@ def pipe_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
            
     return Pipe(
-        wkt_geometry=wkt_geometry,
-        fid=feature['fid'],
-        diameter=feature['diameter'],
-        start_level=feature['start_level'],
-        end_level=feature['end_level'],
-        material=feature['material'],
-        connected_surface_area=feature['connected_surface_area'],
-        accumulated_connected_surface_area=feature['accumulated_connected_surface_area'],
-        max_hydraulic_gradient=feature['max_hydraulic_gradient'],
-        sewerage_type=feature['sewerage_type'],
-        cover_depth=feature['cover_depth'],
-        discharge=feature['discharge'],
-        velocity=feature['velocity']
+        wkt_geometry=str(wkt_geometry),
+        fid=int(feature['fid']),
+        diameter=feature['diameter'].value(),
+        start_level=feature['start_level'].value(),
+        end_level=feature['end_level'].value(),
+        material=feature['material'].value(),
+        connected_surface_area=feature['connected_surface_area'].value(),
+        accumulated_connected_surface_area=feature['accumulated_connected_surface_area'].value(),
+        max_hydraulic_gradient=feature['max_hydraulic_gradient'].value(),
+        sewerage_type=str(feature['sewerage_type']),
+        cover_depth=feature['cover_depth'].value(),
+        discharge=feature['discharge'].value(),
+        velocity=feature['velocity'].value()
         )
 
 def outlet_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
 
     return Outlet(
-        wkt_geometry,
-        feature['fid'],
-        feature['pipe_in_id'],
-        feature['ditch_level'],
-        feature['weir_level']
+        wkt_geometry=str(wkt_geometry),
+        fid=int(feature['fid']),
+        pipe_in_id=int(feature['pipe_in_id']),
+        ditch_level=float(feature['ditch_level']),
+        weir_level=float(feature['weir_level'])
     )
 
 def weir_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
 
     return Weir(
-        wkt_geometry,
-        feature['fid'],
-        feature['pipe_in_id'],
-        feature['pipe_out_id'],
-        feature['weir_level']
-    ) 
+        wkt_geometry=str(wkt_geometry),
+        fid=int(feature['fid']),
+        pipe_in_id=int(feature['pipe_in_id']),
+        pipe_out_id=int(feature['pipe_out_id']),
+        weir_level=float(feature['weir_level'])
+    )
 
 def pumping_station_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
 
     return PumpingStation(
-        wkt_geometry,
-        feature['fid'],
-        feature['pipe_in_id'],
-        feature['pipe_out_id'],
-        feature['stop_level'],
-        feature['start_level'],
-        feature['capacity'],
-        feature['storage']
+        wkt_geometry=str(wkt_geometry),
+        fid=int(feature['fid']),
+        pipe_in_id=int(feature['pipe_in_id']),
+        pipe_out_id=int(feature['pipe_out_id']),
+        stop_level=float(feature['stop_level']),
+        start_level=float(feature['start_level']),
+        capacity=float(feature['capacity']),
+        storage=float(feature['storage'])
     ) 
 
 '''

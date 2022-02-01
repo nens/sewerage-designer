@@ -203,7 +203,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         "return alls attribute values of a certain field of certain layer"
         values=[]
         for feature in layer.getFeatures():
-            values.append(feature[field])
+            values.append(float(feature[field]))
         return values
 
     def compute_diameters(self):
@@ -217,8 +217,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         weir=self.sewerage_network.weir
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
-        
-        self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
+        print(minimum_freeboard);print(type(self.sewerage_network.weir.weir_level))
+        self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard[0])
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         
         self.sewerage_network.calculate_discharge()
