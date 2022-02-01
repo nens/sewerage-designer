@@ -137,7 +137,7 @@ class Weir:
     def __init__(
         self,
         wkt_geometry,
-        fid: int,
+        fid: int = None,
         weir_level: float = None,
         surface_elevation: float = None,
         freeboard: float = None,
@@ -209,7 +209,7 @@ class Pipe:
         start_level: float = None,
         end_level: float = None,
         material: str = None,
-        connected_surface_area: float = None,
+        connected_surface_area: float = 0.0,
         accumulated_connected_surface_area: float = None,
         max_hydraulic_gradient : float = None,
         sewerage_type: str = None,

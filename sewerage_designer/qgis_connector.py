@@ -1,3 +1,4 @@
+import inspect
 from osgeo import ogr,gdal
 from qgis.core import QgsFeature, QgsVectorLayer
 from PyQt5.QtCore import QVariant
@@ -14,22 +15,21 @@ class SewerageDesignerQgsConnector:
 
 def pipe_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
-           
-    return Pipe(
-        wkt_geometry=str(wkt_geometry),
-        fid=int(feature['fid']),
-        diameter=feature['diameter'].value(),
-        start_level=feature['start_level'].value(),
-        end_level=feature['end_level'].value(),
-        material=feature['material'].value(),
-        connected_surface_area=feature['connected_surface_area'].value(),
-        accumulated_connected_surface_area=feature['accumulated_connected_surface_area'].value(),
-        max_hydraulic_gradient=feature['max_hydraulic_gradient'].value(),
-        sewerage_type=str(feature['sewerage_type']),
-        cover_depth=feature['cover_depth'].value(),
-        discharge=feature['discharge'].value(),
-        velocity=feature['velocity'].value()
-        )
+    pipe_signature = inspect.signature(Pipe).parameters
+    pipe = Pipe(wkt_geometry=wkt_geometry)
+    
+    for variable, parameter in pipe_signature.items():
+        print(variable, parameter)
+        if variable != 'wkt_geometry':
+            qgis_feature = feature[variable]
+            if isinstance(qgis_feature, QVariant):
+                print('Qvariant', qgis_feature)
+                value = None
+            else:
+                value = qgis_feature
+            setattr(pipe, variable, value)
+    
+    return pipe
 
 def outlet_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
@@ -43,15 +43,23 @@ def outlet_from_feature(feature: QgsFeature):
     )
 
 def weir_from_feature(feature: QgsFeature):
+    
     wkt_geometry = feature.geometry().asWkt()
-
-    return Weir(
-        wkt_geometry=str(wkt_geometry),
-        fid=int(feature['fid']),
-        pipe_in_id=int(feature['pipe_in_id']),
-        pipe_out_id=int(feature['pipe_out_id']),
-        weir_level=feature['weir_level'].value()
-    )
+    weir_signature = inspect.signature(Weir).parameters
+    weir = Weir(wkt_geometry=wkt_geometry)
+    
+    for variable, parameter in weir_signature.items():
+        print(variable, parameter)
+        if variable != 'wkt_geometry':
+            qgis_feature = feature[variable]
+            if isinstance(qgis_feature, QVariant):
+                print('Qvariant', qgis_feature)
+                value = None
+            else:
+                value = qgis_feature
+            setattr(weir, variable, value)
+    
+    return weir
 
 def pumping_station_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
