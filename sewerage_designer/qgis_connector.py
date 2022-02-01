@@ -37,11 +37,9 @@ def outlet_from_feature(feature: QgsFeature):
     outlet = Outlet(wkt_geometry=wkt_geometry)
     
     for variable, parameter in outlet_signature.items():
-        print(variable, parameter)
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
             if isinstance(qgis_feature, QVariant):
-                print('Qvariant', qgis_feature)
                 value = None
             else:
                 value = qgis_feature
@@ -56,11 +54,9 @@ def weir_from_feature(feature: QgsFeature):
     weir = Weir(wkt_geometry=wkt_geometry)
     
     for variable, parameter in weir_signature.items():
-        print(variable, parameter)
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
             if isinstance(qgis_feature, QVariant):
-                print('Qvariant', qgis_feature)
                 value = None
             else:
                 value = qgis_feature
@@ -74,11 +70,9 @@ def pumping_station_from_feature(feature: QgsFeature):
     pumping_station = PumpingStation(wkt_geometry=wkt_geometry)
     
     for variable, parameter in pumping_station_signature.items():
-        print(variable, parameter)
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
             if isinstance(qgis_feature, QVariant):
-                print('Qvariant', qgis_feature)
                 value = None
             else:
                 value = qgis_feature
