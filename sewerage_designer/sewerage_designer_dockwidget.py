@@ -229,18 +229,29 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         message='The diameters are computed. You can now proceed to validate/ compute the depths.'
         self.finished_computation_message(message)
         
-    def validate_depths(self):
+    def validate_depths(self,cover_depths):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
         if self.sewerage_network is None:
             self.sewerage_network=self.create_network_from_layers()
+        global_settings_layer=self.get_map_layer('global_settings')
+        minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
+        for pipe in self.sewerage_network.pipes.values():
+            pipe.calculate_minimum_cover_depth(minimum_cover_depth)
+        
+        validated=True
+        return validated
 
     def compute_depths(self):
-        #TODO
         #try:
         DEM=self.get_DEM()
-        hoofdfunctie_die_depths_berekent(DEM) #TODO
-        message='The depths are validated/ computed.'
-        self.finished_computation_message(message)
+        cover_depths=hoofdfunctie_die_depths_berekent(DEM) #TODO
+        validated=self.validate_depths(cover_depths)
+        if validated:
+            message='The depths are validated/ computed.'
+            self.finished_computation_message(message)
+        else:
+            message='The depths could not be validated, please change design.'
+            self.finished_computation_message(message)
         #except Exception as ex:
             #message='Something went wrong: 'f"{ex}"
             #self.something_went_wrong_message(message)        
