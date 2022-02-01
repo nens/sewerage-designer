@@ -33,14 +33,21 @@ def pipe_from_feature(feature: QgsFeature):
 
 def outlet_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
-
-    return Outlet(
-        wkt_geometry=str(wkt_geometry),
-        fid=int(feature['fid']),
-        pipe_in_id=int(feature['pipe_in_id']),
-        ditch_level=feature['ditch_level'].value(),
-        weir_level=feature['weir_level'].value()
-    )
+    outlet_signature = inspect.signature(Outlet).parameters
+    outlet = Outlet(wkt_geometry=wkt_geometry)
+    
+    for variable, parameter in outlet_signature.items():
+        print(variable, parameter)
+        if variable != 'wkt_geometry':
+            qgis_feature = feature[variable]
+            if isinstance(qgis_feature, QVariant):
+                print('Qvariant', qgis_feature)
+                value = None
+            else:
+                value = qgis_feature
+            setattr(outlet, variable, value)
+    
+    return outlet
 
 def weir_from_feature(feature: QgsFeature):
     
@@ -63,17 +70,21 @@ def weir_from_feature(feature: QgsFeature):
 
 def pumping_station_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
-
-    return PumpingStation(
-        wkt_geometry=str(wkt_geometry),
-        fid=int(feature['fid']),
-        pipe_in_id=int(feature['pipe_in_id']),
-        pipe_out_id=int(feature['pipe_out_id']),
-        stop_level=feature['stop_level'].value(),
-        start_level=feature['start_level'].value(),
-        capacity=feature['capacity'].value(),
-        storage=feature['storage'].value()
-    ) 
+    pumping_station_signature = inspect.signature(Pipe).parameters
+    pumping_station = PumpingStation(wkt_geometry=wkt_geometry)
+    
+    for variable, parameter in pumping_station_signature.items():
+        print(variable, parameter)
+        if variable != 'wkt_geometry':
+            qgis_feature = feature[variable]
+            if isinstance(qgis_feature, QVariant):
+                print('Qvariant', qgis_feature)
+                value = None
+            else:
+                value = qgis_feature
+            setattr(pumping_station, variable, value)
+    
+    return pumping_station
 
 '''
 def update_qgs_feature(layer, feature_id, attribute, attribute_value):
@@ -186,26 +197,37 @@ def network_to_layers(network,layers):
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            print(type(QVariant(pipe.connected_surface_area)))
-                            update_field(layer,feature,field,QVariant(pipe.connected_surface_area))
+                            update_field(layer,feature,field,pipe.connected_surface_area)
                     elif field=='accumulated_connected_surface_area':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,QVariant(pipe.accumulated_connected_surface_area))                    
+                            update_field(layer,feature,field,pipe.accumulated_connected_surface_area)                    
                     elif field=='elevation':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,QVariant(pipe.elevation))
+                            update_field(layer,feature,field,pipe.elevation)
                     elif field=='max_hydraulic_gradient':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,QVariant(pipe.max_hydraulic_gradient))
+                            update_field(layer,feature,field,pipe.max_hydraulic_gradient)
+                    elif field=='diameter':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.diameter)
+                    elif field=='discharge':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.discharge)                        
                     else:
                         continue
         else:
