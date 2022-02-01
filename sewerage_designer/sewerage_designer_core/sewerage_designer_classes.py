@@ -398,8 +398,8 @@ class PipeNetwork:
             )
 
         self.network.add_edge(
-            round(pipe.start_coordinate[0]),
-            round(pipe.end_coordinate[0]),
+            round(pipe.start_coordinate[0],pipe.start_coordinate[1]),
+            round(pipe.end_coordinate[0],pipe.end_coordinate[1]),
             fid=pipe.fid,
             length=pipe.geometry.Length(),
         )
