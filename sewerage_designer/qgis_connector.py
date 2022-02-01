@@ -1,5 +1,6 @@
 from osgeo import ogr,gdal
 from qgis.core import QgsFeature, QgsVectorLayer
+from PyQt5.QtCore import QVariant
 from qgis.core.additions.edit import edit
 
 from sewerage_designer_core.sewerage_designer_classes import Pipe,Outlet,Weir,PumpingStation,StormWaterPipeNetwork,WasteWaterPipeNetwork
@@ -37,8 +38,8 @@ def outlet_from_feature(feature: QgsFeature):
         wkt_geometry=str(wkt_geometry),
         fid=int(feature['fid']),
         pipe_in_id=int(feature['pipe_in_id']),
-        ditch_level=float(feature['ditch_level']),
-        weir_level=float(feature['weir_level'])
+        ditch_level=feature['ditch_level'].value(),
+        weir_level=feature['weir_level'].value()
     )
 
 def weir_from_feature(feature: QgsFeature):
@@ -49,7 +50,7 @@ def weir_from_feature(feature: QgsFeature):
         fid=int(feature['fid']),
         pipe_in_id=int(feature['pipe_in_id']),
         pipe_out_id=int(feature['pipe_out_id']),
-        weir_level=float(feature['weir_level'])
+        weir_level=feature['weir_level'].value()
     )
 
 def pumping_station_from_feature(feature: QgsFeature):
@@ -60,10 +61,10 @@ def pumping_station_from_feature(feature: QgsFeature):
         fid=int(feature['fid']),
         pipe_in_id=int(feature['pipe_in_id']),
         pipe_out_id=int(feature['pipe_out_id']),
-        stop_level=float(feature['stop_level']),
-        start_level=float(feature['start_level']),
-        capacity=float(feature['capacity']),
-        storage=float(feature['storage'])
+        stop_level=feature['stop_level'].value(),
+        start_level=feature['start_level'].value(),
+        capacity=feature['capacity'].value(),
+        storage=feature['storage'].value()
     ) 
 
 '''
@@ -177,25 +178,26 @@ def network_to_layers(network,layers):
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.connected_surface_area)
+                            print(type(QVariant(pipe.connected_surface_area)))
+                            update_field(layer,feature,field,QVariant(pipe.connected_surface_area))
                     elif field=='accumulated_connected_surface_area':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.accumulated_connected_surface_area)                    
+                            update_field(layer,feature,field,QVariant(pipe.accumulated_connected_surface_area))                    
                     elif field=='elevation':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.elevation)
+                            update_field(layer,feature,field,QVariant(pipe.elevation))
                     elif field=='max_hydraulic_gradient':
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.max_hydraulic_gradient)
+                            update_field(layer,feature,field,QVariant(pipe.max_hydraulic_gradient))
                     else:
                         continue
         else:
