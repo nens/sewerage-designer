@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(__file__))
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal
-from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsMapLayerProxyModel
+from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel
 
 from qgis_connector import *
 from sewerage_designer_core.sewerage_designer_classes import *
@@ -61,11 +61,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.mMapLayerComboBox_DEM.setShowCrs(True)
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
         self.mMapLayerComboBox_CS.setShowCrs(True)
-        self.mMapLayerComboBox_CS.setFilters(QgsMapLayerProxyModel.VectorLayer)
+        self.mMapLayerComboBox_CS.setFilters(QgsMapLayerProxyModel.PolygonLayer)
         self.pushButton_ComputeCS.clicked.connect(self.pushbutton_computeCS_isChecked)        
         for key in AREA_WIDE_RAIN:
             self.comboBox_DesignRain.addItem(key)
-        self.lineEdit_PeakIntensity.setText(str(max(AREA_WIDE_RAIN[list(AREA_WIDE_RAIN.keys())[0]]))) #initialise intensity with first event
+        self.lineEdit_PeakIntensity.setText(str(round(max(AREA_WIDE_RAIN[list(AREA_WIDE_RAIN.keys())[0]])*12,1))) #initialise intensity with first event
         self.comboBox_DesignRain.currentTextChanged.connect(self.write_peak_intensity) #change intensity if users changes design event
         self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)        
         self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
@@ -117,7 +117,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
            
     def get_peak_intensity_design_event(self,AREA_WIDE_RAIN):
         event=self.comboBox_DesignRain.currentText()
-        peak_intensity=max(AREA_WIDE_RAIN[event])
+        peak_intensity=round(max(AREA_WIDE_RAIN[event])*12,1)
         return peak_intensity
     
     def write_peak_intensity(self):
@@ -178,8 +178,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def compute_CS(self):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
-        if self.sewerage_network is None:
-            self.sewerage_network=self.create_network_from_layers()
+        self.sewerage_network=self.create_network_from_layers()
         for node in self.sewerage_network.network.nodes:
             print(self.sewerage_network.network.nodes[node])
         try:
@@ -211,9 +210,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
 
     def compute_diameters(self):
         """Compute diameters for the current network and design rainfall event"""
-        #TODO
-        if self.sewerage_network is None:
-            self.sewerage_network=self.create_network_from_layers()
+        self.sewerage_network=self.create_network_from_layers()
         
         DEM=self.get_DEM()
         self.sewerage_network.add_elevation_to_network(DEM)
@@ -224,7 +221,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         
-        peak_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        peak_intensity = self.get_final_peak_intensity_from_lineedit()
         for pipe_id, pipe in self.sewerage_network.pipes.items():
             pipe.calculate_discharge(intensity=peak_intensity, timestep = 300)
             pipe.calculate_diameter()
@@ -238,8 +235,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         
     def validate_depths(self,cover_depths):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
-        if self.sewerage_network is None:
-            self.sewerage_network=self.create_network_from_layers()
+        self.sewerage_network=self.create_network_from_layers()
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
         for pipe in self.sewerage_network.pipes.values():

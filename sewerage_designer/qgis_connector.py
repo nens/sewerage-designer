@@ -205,6 +205,7 @@ def network_to_layers(network,layers):
                             pipe = network.pipes[feature_fid]
                             update_field(layer,feature,field,pipe.elevation)
                     elif field=='max_hydraulic_gradient':
+                        print('field='f"{field}")
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']

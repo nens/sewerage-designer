@@ -356,7 +356,7 @@ color: rgb(0, 0, 0);</string>
               <string notr="true">color: rgb(170, 255, 255);</string>
              </property>
              <property name="text">
-              <string>Peak intensity [mm/5min]:</string>
+              <string>Peak intensity [mm/hour]:</string>
              </property>
             </widget>
            </item>
@@ -407,7 +407,7 @@ color: rgb(0, 0, 0);</string>
               <string notr="true">background-color: rgb(170, 255, 255);;color: rgb(0, 0, 0);</string>
              </property>
              <property name="text">
-              <string>Compute depths</string>
+              <string>Validate depths</string>
              </property>
             </widget>
            </item>

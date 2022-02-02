@@ -441,12 +441,23 @@ class PipeNetwork:
         furthest_node, distance = list(distance_dictionary.items())[-1]
         furthest_edge = list(self.network.edges(furthest_node))[0]
         furthest_pipe = self.get_pipe_with_edge(furthest_edge)
+        print('weir_coodinate='f"{weir_coordinate}")
+        print('distance_dictionary='f"{distance_dictionary}")
+        print('distance='f"{distance}")
+        print('furthest_node='f"{furthest_node}")
+        print('furthest_edge='f"{furthest_edge}")
+        print('furthest_pipe='f"{furthest_pipe}")
 
         max_hydraulic_gradient = (
             (furthest_pipe.start_elevation + waking)
             - self.network_upstream_hydraulic_head
         ) / distance
 
+        print('self.network_upstream_hydraulic_head='f"{self.network_upstream_hydraulic_head}")
+        print('waking='f"{waking}")
+        print('furthest_pipe.start_elevation='f"{furthest_pipe.start_elevation}")
+        print('max_hydraulic_gradient='f"{max_hydraulic_gradient}")
+        
         self.max_hydraulic_gradient = max_hydraulic_gradient
         for pipe in self.pipes:
             setattr(self.pipes[pipe], "max_hydraulic_gradient", max_hydraulic_gradient)
