@@ -179,8 +179,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
         self.sewerage_network=self.create_network_from_layers()
-        for node in self.sewerage_network.network.nodes:
-            print(self.sewerage_network.network.nodes[node])
         try:
             bgt_inlooptabel_fn=self.get_BGT_inlooptabel()
         except:
@@ -190,7 +188,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         #try:
         for pipe in self.sewerage_network.pipes.values():
             pipe.determine_connected_surface_area(bgt_inlooptabel)
-            print(pipe.connected_surface_area)
             
         self.sewerage_network.accumulate_connected_surface_area()
         layers_list=self.get_list_of_sewerage_designer_layers()
@@ -217,7 +214,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         weir=self.sewerage_network.weir
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
-        print(minimum_freeboard);print(type(self.sewerage_network.weir.weir_level))
         self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         
@@ -226,7 +222,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             pipe.calculate_discharge(intensity=peak_intensity, timestep = 300)
             pipe.calculate_diameter()
             pipe.set_material()
-            print(pipe)
             
         layers_list=self.get_list_of_sewerage_designer_layers()
         network_to_layers(self.sewerage_network,layers_list)

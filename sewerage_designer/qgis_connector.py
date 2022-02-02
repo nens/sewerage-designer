@@ -19,11 +19,9 @@ def pipe_from_feature(feature: QgsFeature):
     pipe = Pipe(wkt_geometry=wkt_geometry)
     
     for variable, parameter in pipe_signature.items():
-        print(variable, parameter)
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
             if isinstance(qgis_feature, QVariant):
-                print('Qvariant', qgis_feature)
                 value = None
             else:
                 value = qgis_feature
@@ -225,8 +223,7 @@ def network_to_layers(network,layers):
                             update_field(layer,feature,field,pipe.discharge)                        
                     else:
                         continue
-        else:
-            print(layer.name())
+
                     #we do nothing because we don't need to update these fields
     #TODO check if list of values are same length as number of features
     

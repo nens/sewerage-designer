@@ -446,7 +446,6 @@ class PipeNetwork:
         print('distance='f"{distance}")
         print('furthest_node='f"{furthest_node}")
         print('furthest_edge='f"{furthest_edge}")
-        print('furthest_pipe='f"{furthest_pipe}")
 
         max_hydraulic_gradient = (
             (furthest_pipe.start_elevation + waking)
@@ -469,18 +468,25 @@ class PipeNetwork:
             pipe = self.get_pipe_with_edge(edge)
             start_node = edge[0]
             distance_to_weir = self.distance_to_weir(start_node)
-
+            print('start_node='f"{start_node}")
+            print('distance_to_weir='f"{distance_to_weir}")
             hydraulic_head = (
                 self.network_downstream_hydraulic_head
                 + pipe.max_hydraulic_gradient * distance_to_weir
             )
-            head_difference = hydraulic_head - (pipe.lowest_elevation + waking)
-            if head_difference > 0:
+            print('self.network_downstream_hydraulic_head='f"{self.network_downstream_hydraulic_head}")
+            print('hydraulic_head='f"{hydraulic_head}")
+            print('pipe.lowest_elevation='f"{pipe.lowest_elevation}")
+            head_difference = (pipe.lowest_elevation - waking) - hydraulic_head
+            print('head_difference='f"{head_difference}")
+            if head_difference < 0:
                 new_hydraulic_gradient = pipe.max_hydraulic_gradient - (
                     head_difference / distance_to_weir
                 )
+                print('new_hydraulic_gradient='f"{new_hydraulic_gradient}")
                 if new_hydraulic_gradient < self.max_hydraulic_gradient:
                     self.max_hydraulic_gradient = new_hydraulic_gradient
+                    print('smaller,so:self.max_hydraulic_gradient='f"{self.max_hydraulic_gradient}")
 
         for pipe in self.pipes:
             setattr(
@@ -573,12 +579,16 @@ class PipeNetwork:
 
         return upstream_pipes
 
-    def distance_to_weir(self, node):
+    def distance_to_weir(self,node):
         """Get the distance to the outlet from a node in the network"""
 
-        spl = dict(nx.all_pairs_shortest_path_length(self.network))
-        distance_to_weir = spl[node][self.weir_coordinate]
-
+        #spl=dict(nx.all_pairs_shortest_path_length(self.network))
+        #distance_to_weir=spl[node][self.weir_coordinate]
+        #print('spl='f"{spl}")
+        #print('node='f"{node}")
+        #print('self.weir_coordinate='f"{self.weir_coordinate}")
+        
+        distance_to_weir=nx.shortest_path_length(G=self.network,source=node,target=self.weir_coordinate,weight='length')
         return distance_to_weir
 
     def draw_network(self, node_label_attr, edge_label_attr):
