@@ -307,10 +307,10 @@ class Pipe:
         )
         self.discharge = pipe_discharge
 
-    def calculate_diameter(self):
+    def calculate_diameter(self,vmax):
         """Use the Colebrook White method to esimate the diameters"""
         colebrook_white = ColebrookWhite(
-            q=self.discharge, Smax=self.max_hydraulic_gradient, sewerage_type=self.sewerage_type
+            q=self.discharge, Smax=self.max_hydraulic_gradient, sewerage_type=self.sewerage_type, v_max=vmax
         )
 
         estimated_diameter = colebrook_white.iterate_diameters()

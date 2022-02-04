@@ -25,8 +25,6 @@ import math
 from .constants import *
 
 #user-defined variables:
-Q=0.025                 #known discharge [m3/s]
-V_MAX=0.5               #initial max velocity [m/s]
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
 D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2]
 
@@ -37,7 +35,7 @@ VI=1.007*10**-6     #kinematic viscosity [m2/s]
 
 class ColebrookWhite:
     
-    def __init__(self, q, Smax, sewerage_type, v_max=V_MAX):
+    def __init__(self, q, Smax, sewerage_type, v_max):
         self.q=q                 #discharge [m3/s]
         self.vmax=v_max #initial max velocity [m/s]
         self.Smax=Smax          #max hydraulic gradient [-]
@@ -55,7 +53,7 @@ class ColebrookWhite:
         
         
     def calculate_diameter(self):
-        D=2*math.sqrt((math.pi*self.q)/self.vmax)        
+        D=2*math.sqrt((math.pi*self.q)/self.vmax)
         return D
 
     def find_closest_diameter(self, diameter):
@@ -81,16 +79,28 @@ class ColebrookWhite:
     def colebrook_white(self):
         #vcalc=(-2*np.sqrt(2*g*D*Smax))*np.log((k/(3.7*D))+((2.5*vi)/(D*np.sqrt(2*g*D*Smax))))
         #isolation of S found at https://civilweb-spreadsheets.com/drainage-design-spreadsheets/pipe-flow-calculator/colebrook-white-equation/    
-        Scalc=self.vmax**2/(8*G*self.D_design*(math.log10((K/(3.7*self.D_design))+((6.28*VI)/(self.vmax*self.D_design))**0.89))**2)        
+        Scalc=self.vmax**2/(8*G*self.D_design*(math.log10((K/(3.7*self.D_design))+((6.28*VI)/(self.vmax*self.D_design))**0.89))**2)  
         return Scalc
     
     def iterate_diameters(self):
+        print('intial velocity='f"{self.vmax}")
+        print('q='f"{self.q}")
+        print('first guess D='f"{self.D_precise}")
+        print('D_design='f"{self.D_design}")
+        self.vmax = self.calc_vmax() #compute vmax corresponding to D_design before computing Scalc
+        print('calc_vmax='f"{self.vmax}")
         Scalc = self.colebrook_white()
+        print('Scalc='f"{Scalc}")
         
         while Scalc > self.Smax and self.D_design != self.d_options[-1]:
+            print('Scalc='f"{Scalc}")
+            print('Smax='f"{self.Smax}")
             self.increase_diameter()
-            self.v_max = self.calc_vmax()
+            print('increase_diameter:D_design='f"{self.D_design}")
+            self.vmax = self.calc_vmax()
+            print('calc_vmax='f"{self.vmax}")
             Scalc = self.colebrook_white()
+            print('colebrook_white_Scalc='f"{Scalc}")
         
         return self.D_design
         

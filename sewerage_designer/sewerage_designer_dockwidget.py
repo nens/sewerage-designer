@@ -216,11 +216,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
         self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
         self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
-        
+        vmax=self.read_attribute_values(global_settings_layer,'maximum_velocity')[0]
         peak_intensity = self.get_final_peak_intensity_from_lineedit()
         for pipe_id, pipe in self.sewerage_network.pipes.items():
             pipe.calculate_discharge(intensity=peak_intensity, timestep = 300)
-            pipe.calculate_diameter()
+            pipe.calculate_diameter(vmax)
             pipe.set_material()
             
         layers_list=self.get_list_of_sewerage_designer_layers()
