@@ -52,12 +52,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
 
         self.setupUi(self)
-        self.sewerage_network=None        
-        self.mQgsFileWidget_PathEmptyGeopackage.setStorageMode(3) #set to save mode
-        self.mQgsFileWidget_PathEmptyGeopackage.setFilter('*.gpkg')
-        self.pushButton_CreateNewGeopackage.clicked.connect(self.pushbutton_create_new_geopackage_isChecked)
+        self.sewerage_network=None      
+        if QgsProject.instance().layerTreeRoot().findGroup('Sewerage Designer') != None:
+            self.set_geopackage_load_path_if_group_in_project()
+        self.mQgsFileWidget_PathGeopackage.setStorageMode(3) #set to save mode
+        self.mQgsFileWidget_PathGeopackage.setConfirmOverwrite(False)
         self.mQgsFileWidget_PathGeopackage.setFilter('*.gpkg')
-        self.pushButton_LoadGeopackage.clicked.connect(self.pushbutton_load_geopackage_isChecked)
+        self.mQgsFileWidget_PathGeopackage.fileChanged.connect(self.filepath_create_or_load_geopackage_isChanged)
         self.mMapLayerComboBox_DEM.setShowCrs(True)
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
         self.mMapLayerComboBox_CS.setShowCrs(True)
@@ -71,7 +72,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
     
     def add_group(self,group_name):
-        group=QgsProject.instance().layerTreeRoot().addGroup(group_name) 
+        root=QgsProject.instance().layerTreeRoot()
+        for group in [child for child in root.children() if child.nodeType() == 0]:
+            if group.name()==group_name:
+                root.removeChildNode(group)
+        group=root.addGroup(group_name) 
         return group
     
     def add_layer_to_group(self,path,layername,group):       
@@ -83,14 +88,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             QgsProject.instance().addMapLayer(vlayer,False)
             group.addLayer(vlayer)
 
-    def get_geopackage_save_path(self):
-        path=self.mQgsFileWidget_PathEmptyGeopackage.filePath()
+    def get_geopackage_create_or_load_path(self):
+        path=self.mQgsFileWidget_PathGeopackage.filePath()
         if not path.endswith('.gpkg'):
             path=path+'.gpkg'
-        return path
-
-    def get_geopackage_load_path(self):
-        path=self.mQgsFileWidget_PathGeopackage.filePath()
         return path
     
     def set_geopackage_load_path_if_group_in_project(self):
@@ -98,7 +99,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         if "|layername" in path: 
             path=path.split("|",1)[0] #remove layername (get path before)
         self.mQgsFileWidget_PathGeopackage.setFilePath(path)
-    
+            
     def get_DEM(self):
         path=self.mMapLayerComboBox_DEM.currentLayer().source()
         return path
@@ -131,6 +132,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
           
     def copy(self,source,dest):
     	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
+
+    def info_message(self,message):
+        QtWidgets.QMessageBox.about(self,"Info",message)
         
     def finished_computation_message(self,message):
         QtWidgets.QMessageBox.about(self,"Computation finished",message)
@@ -185,7 +189,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             message='BGT inlooptabel not defined.'
             self.something_went_wrong_message(message)          
         bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
-        #try:
         for pipe in self.sewerage_network.pipes.values():
             pipe.determine_connected_surface_area(bgt_inlooptabel)
             
@@ -194,9 +197,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         network_to_layers(self.sewerage_network,layers_list)
         message='The connected surfaces are computed. You can now proceed to compute the diameters.'
         self.finished_computation_message(message)
-        #except Exception as ex:
-            #message='Something went wrong: 'f"{ex}"
-            #self.something_went_wrong_message(message)
 
     def read_attribute_values(self,layer,field):
         "return alls attribute values of a certain field of certain layer"
@@ -208,7 +208,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def compute_diameters(self):
         """Compute diameters for the current network and design rainfall event"""
         self.sewerage_network=self.create_network_from_layers()
-        
         DEM=self.get_DEM()
         self.sewerage_network.add_elevation_to_network(DEM)
         weir=self.sewerage_network.weir
@@ -228,60 +227,47 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         message='The diameters are computed. You can now proceed to validate/ compute the depths.'
         self.finished_computation_message(message)
         
-    def validate_depths(self,cover_depths):
+    def validate_depths(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
         self.sewerage_network=self.create_network_from_layers()
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
-        for pipe in self.sewerage_network.pipes.values():
-            pipe.calculate_minimum_cover_depth(minimum_cover_depth)
-        
-        validated=True
-        return validated
-
-    def compute_depths(self):
-        #try:
         DEM=self.get_DEM()
-        cover_depths=hoofdfunctie_die_depths_berekent(DEM) #TODO
-        validated=self.validate_depths(cover_depths)
-        if validated:
-            message='The depths are validated/ computed.'
+        self.sewerage_network.add_elevation_to_network(DEM) #re-do this because user can change the DEM after compute diameters
+        validated=[]
+        for pipe in self.sewerage_network.pipes.values():
+            pipe.calculate_cover_depth()
+            print(pipe.cover_depth)
+            if pipe.cover_depth>minimum_cover_depth:
+                validated.append(True)
+            else:
+                validated.append(False)
+        print(validated)
+        if all(validated):
+            message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
             self.finished_computation_message(message)
         else:
-            message='The depths could not be validated, please change design.'
-            self.finished_computation_message(message)
-        #except Exception as ex:
-            #message='Something went wrong: 'f"{ex}"
-            #self.something_went_wrong_message(message)        
+            message='Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red.'
+            self.finished_computation_message(message)             
     		   	
-    def pushbutton_create_new_geopackage_isChecked(self):
-        dest=self.get_geopackage_save_path()     
-        if dest=='.gpkg':
-            message='Please define file savepath'
-            self.something_went_wrong_message(message)
-            raise ValueError('No path defined')
-        self.copy(GEOPACKAGE,dest)
+    def filepath_create_or_load_geopackage_isChanged(self):
+        gpkg=self.get_geopackage_create_or_load_path()
+        if gpkg=='.gpkg':
+            return
+        else:
+            if os.path.isfile(gpkg):
+                message='Loaded your design.'
+                self.info_message(message)
+            else:
+                self.copy(GEOPACKAGE,gpkg)
+                message='New design created.'
+                self.info_message(message)
         layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
         group_name='Sewerage Designer'
         group=self.add_group(group_name) 
         for layername in layernames:
-            self.add_layer_to_group(dest,layername,group)
-        
-    def pushbutton_load_geopackage_isChecked(self):
-        if QgsProject.instance().layerTreeRoot().findGroup('Sewerage Designer') != None:
-            self.set_geopackage_load_path_if_group_in_project()
-        else:
-            gpkg=self.get_geopackage_load_path()
-            if gpkg=='':
-                message='Please define filepath'
-                self.something_went_wrong_message(message) 
-                raise ValueError('No path defined')
-            layernames=['global_settings','weir','pumping_station','outlet','manhole','sewerage']
-            group_name='Sewerage Designer'
-            group=self.add_group(group_name) 
-            for layername in layernames:
-                self.add_layer_to_group(gpkg,layername,group)
-           
+            self.add_layer_to_group(gpkg,layername,group)        
+                   
     def pushbutton_computeCS_isChecked(self):
         self.compute_CS()
         
@@ -291,7 +277,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             self.compute_diameters()
         
     def pushbutton_computeDepths_isChecked(self):
-        self.compute_depths()
+        self.validate_depths()
     
     def closeEvent(self,event):
         self.closingPlugin.emit()

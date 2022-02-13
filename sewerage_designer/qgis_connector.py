@@ -203,7 +203,6 @@ def network_to_layers(network,layers):
                             pipe = network.pipes[feature_fid]
                             update_field(layer,feature,field,pipe.elevation)
                     elif field=='max_hydraulic_gradient':
-                        print('field='f"{field}")
                         features=get_features(layer)
                         for feature in features:
                             feature_fid = feature['fid']
@@ -220,11 +219,35 @@ def network_to_layers(network,layers):
                         for feature in features:
                             feature_fid = feature['fid']
                             pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.discharge)                        
-                    else:
-                        continue
-
-                    #we do nothing because we don't need to update these fields
-    #TODO check if list of values are same length as number of features
-    
+                            update_field(layer,feature,field,pipe.discharge) 
+                    elif field=='cover_depth':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.cover_depth)
+                    elif field=='material':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.material)
+                    elif field=='end_level':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.end_level)
+                    elif field=='start_level':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.start_level)    
+                    elif field=='velocity':
+                        features=get_features(layer)
+                        for feature in features:
+                            feature_fid = feature['fid']
+                            pipe = network.pipes[feature_fid]
+                            update_field(layer,feature,field,pipe.velocity)    
 

@@ -85,13 +85,13 @@
           <property name="minimumSize">
            <size>
             <width>0</width>
-            <height>210</height>
+            <height>100</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
-            <height>210</height>
+            <height>100</height>
            </size>
           </property>
           <property name="styleSheet">
@@ -102,7 +102,7 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
-            <widget class="QLabel" name="label_CreateNewGeopackage">
+            <widget class="QLabel" name="label_CreateOrLoadGeopackage">
              <property name="enabled">
               <bool>true</bool>
              </property>
@@ -119,61 +119,17 @@
               <string notr="true">color: rgb(170, 255, 255);</string>
              </property>
              <property name="text">
-              <string>Create new design:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QgsFileWidget" name="mQgsFileWidget_PathEmptyGeopackage">
-             <property name="cursor">
-              <cursorShape>IBeamCursor</cursorShape>
-             </property>
-             <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_CreateNewGeopackage">
-             <property name="styleSheet">
-              <string notr="true">background-color: rgb(170, 255, 255);
-color: rgb(0, 0, 0);</string>
-             </property>
-             <property name="text">
-              <string>Create new geopackage</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="label_LoadGeopackage">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="styleSheet">
-              <string notr="true">color: rgb(170, 255, 255);</string>
-             </property>
-             <property name="text">
-              <string>Load existing design:</string>
+              <string>Create new or load existing design:</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QgsFileWidget" name="mQgsFileWidget_PathGeopackage">
+             <property name="cursor">
+              <cursorShape>IBeamCursor</cursorShape>
+             </property>
              <property name="styleSheet">
               <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_LoadGeopackage">
-             <property name="styleSheet">
-              <string notr="true">background-color: rgb(170, 255, 255);;color: rgb(0, 0, 0);</string>
-             </property>
-             <property name="text">
-              <string>Load geopackage</string>
              </property>
             </widget>
            </item>
