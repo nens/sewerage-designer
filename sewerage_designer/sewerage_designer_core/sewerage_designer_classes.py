@@ -10,6 +10,7 @@ import os
 from osgeo import gdal, ogr
 import networkx as nx
 import json
+import numpy as np
 
 from .constants import *
 from .colebrook_white import ColebrookWhite
@@ -298,12 +299,12 @@ class Pipe:
         )
         self.connected_surface_area = connected_surface_area
 
-    def calculate_discharge(self, intensity, timestep):
+    def calculate_discharge(self, intensity):
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
 
-        # intensity is in mm/hr, timestep is in seconds, output discharge is m3/s
+        # intensity is in mm/h, timestep is in seconds, output discharge is m3/s
         pipe_discharge = self.accumulated_connected_surface_area * (
-            (intensity / 1000) / timestep
+            (intensity / 1000) / 3600
         )
         self.discharge = pipe_discharge
 
@@ -350,7 +351,7 @@ class PipeNetwork:
         self.sewerage_type = None
         self.outlet_level = None
         self.pipes = {}
-        self.weir = None
+        self.weirs = {}
 
     @property
     def reverse_network(self):
@@ -376,10 +377,12 @@ class PipeNetwork:
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
         self.pipes[pipe.fid] = pipe
-
+        pipe_edge_start = (round(pipe.start_coordinate[0]),round(pipe.start_coordinate[1]))
+        pipe_edge_end = (round(pipe.end_coordinate[0]),round(pipe.end_coordinate[1]))
+        
         if pipe.start_coordinate not in self.network.nodes:
             self.network.add_node(
-                (round(pipe.start_coordinate[0]), round(pipe.start_coordinate[1])),
+                (pipe_edge_start[0], pipe_edge_start[1]),
                 type="manhole",
                 position=pipe.start_coordinate,
                 connected_area=0,
@@ -387,30 +390,31 @@ class PipeNetwork:
 
         if pipe.end_coordinate not in self.network.nodes:
             self.network.add_node(
-                (round(pipe.end_coordinate[0]), round(pipe.end_coordinate[1])),
+                (pipe_edge_end[0], pipe_edge_end[1]),
                 type="manhole",
                 position=pipe.end_coordinate,
                 connected_area=0,
             )
 
         self.network.add_edge(
-            (round(pipe.start_coordinate[0]), round(pipe.start_coordinate[1])),
-            (round(pipe.end_coordinate[0]), round(pipe.end_coordinate[1])),
+            (pipe_edge_start[0], pipe_edge_start[1]),
+            (pipe_edge_end[0], pipe_edge_end[1]),
             fid=pipe.fid,
             length=pipe.geometry.Length(),
         )
 
     def add_weir(self, weir: Weir):
         """Add a weir to the network, as an object and as an edge to the graph"""
-        self.weir = weir
-
+        self.weirs[weir.fid] = weir
+        
         # Add the node to the network, if the node is already present change it's type
         weir_coordinate = (round(weir.coordinate[0]),round(weir.coordinate[1]))
-        self.weir_coordinate = weir_coordinate
+        weir._node_coordinate = weir_coordinate
         if weir_coordinate not in self.network.nodes:
             self.network.add_node(weir_coordinate, 
                                   type="weir",
-                                 connected_area=0)
+                                 connected_area=0,
+                                 position=weir.coordinate)
         else:
             attr = {weir_coordinate: {"type": "weir", "connected_area":0}}
             nx.set_node_attributes(self.network, attr)
@@ -434,29 +438,42 @@ class PipeNetwork:
         and the furthest node divided by the distance between the two
         Assign this back to all the pipes in the network
         """
+        
+        # Get all weirs (out-degree=0) nodes in the network
+        # Calculate the hydraulic gradient to the furthest upstream point
+        # Walk the network upstream from each of these nodes
+        # At each pipe, calculate if the estmated hydraulic gradient is sufficient for it's lowest elevation
+        # If not, lower the gradient for all downstream pipes
+        # Calculate what the new hydraulic head will be at the start of the pipe
+        # Calculate the new hydraulic gradient for upstream pipes using the new hydraulic head
 
         # Get the distance dictionary for the end node
-        weir_coordinate = (round(self.weir.coordinate[0]), round(self.weir.coordinate[1]))
-        distance_dictionary = self.distance_matrix_reversed[weir_coordinate][0]
-        furthest_node, distance = list(distance_dictionary.items())[-1]
-        furthest_edge = list(self.network.edges(furthest_node))[0]
-        furthest_pipe = self.get_pipe_with_edge(furthest_edge)
-        print('weir_coodinate='f"{weir_coordinate}")
-        print('distance_dictionary='f"{distance_dictionary}")
-        print('distance='f"{distance}")
-        print('furthest_node='f"{furthest_node}")
-        print('furthest_edge='f"{furthest_edge}")
+        hydraulic_gradients = []
+        for weir in self.weirs.values():
+            weir_node = weir._node_coordinate
+            distance_dictionary = self.distance_matrix_reversed[weir_node][0]
+            furthest_node, distance = list(distance_dictionary.items())[-1]
+            furthest_edge = list(self.network.edges(furthest_node))[0]
+            furthest_pipe = self.get_pipe_with_edge(furthest_edge)
+            print('weir_coodinate='f"{weir_node}")
+            print('distance_dictionary='f"{distance_dictionary}")
+            print('distance='f"{distance}")
+            print('furthest_node='f"{furthest_node}")
+            print('furthest_edge='f"{furthest_edge}")
 
-        max_hydraulic_gradient = (
-            (furthest_pipe.start_elevation + waking)
-            - self.network_upstream_hydraulic_head
-        ) / distance
+            hydraulic_gradient = (
+                (furthest_pipe.start_elevation + waking)
+                - (weir.weir_level + weir.freeboard)
+            ) / distance
+            
+            hydraulic_gradients += [hydraulic_gradient]
 
-        print('self.network_upstream_hydraulic_head='f"{self.network_upstream_hydraulic_head}")
         print('waking='f"{waking}")
         print('furthest_pipe.start_elevation='f"{furthest_pipe.start_elevation}")
+        print(hydraulic_gradients)
+        max_hydraulic_gradient = min(hydraulic_gradients)
         print('max_hydraulic_gradient='f"{max_hydraulic_gradient}")
-        
+
         self.max_hydraulic_gradient = max_hydraulic_gradient
         for pipe in self.pipes:
             setattr(self.pipes[pipe], "max_hydraulic_gradient", max_hydraulic_gradient)
@@ -467,14 +484,13 @@ class PipeNetwork:
         for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
             start_node = edge[0]
-            distance_to_weir = self.distance_to_weir(start_node)
+            distance_to_weir, closest_weir = self.find_closest_weir(start_node)
             print('start_node='f"{start_node}")
             print('distance_to_weir='f"{distance_to_weir}")
             hydraulic_head = (
-                self.network_downstream_hydraulic_head
+                (closest_weir.weir_level + closest_weir.freeboard)
                 + pipe.max_hydraulic_gradient * distance_to_weir
             )
-            print('self.network_downstream_hydraulic_head='f"{self.network_downstream_hydraulic_head}")
             print('hydraulic_head='f"{hydraulic_head}")
             print('pipe.lowest_elevation='f"{pipe.lowest_elevation}")
             head_difference = (pipe.lowest_elevation - waking) - hydraulic_head
@@ -569,6 +585,16 @@ class PipeNetwork:
 
         return pipe
 
+    def find_downstream_pipes(self, node):
+        """Find all connected downstream pipes in the network from a starting node"""
+        downstream_edges = nx.edge_dfs(self.network, node)
+        downstream_pipes = []
+        for edge in downstream_edges:
+            pipe = self.get_pipe_with_edge(edge)
+            downstream_pipes.append(pipe)
+
+        return downstream_pipes
+
     def find_upstream_pipes(self, node):
         """Find all connected upstream pipes in the network from a starting node"""
         upstream_edges = nx.edge_dfs(self.network, node, orientation="reverse")
@@ -579,17 +605,22 @@ class PipeNetwork:
 
         return upstream_pipes
 
-    def distance_to_weir(self,node):
-        """Get the distance to the outlet from a node in the network"""
-
-        #spl=dict(nx.all_pairs_shortest_path_length(self.network))
-        #distance_to_weir=spl[node][self.weir_coordinate]
-        #print('spl='f"{spl}")
-        #print('node='f"{node}")
-        #print('self.weir_coordinate='f"{self.weir_coordinate}")
+    def find_closest_weir(self,node):
+        """Get the distance to the closest weir from a node in the network"""
         
-        distance_to_weir=nx.shortest_path_length(G=self.network,source=node,target=self.weir_coordinate,weight='length')
-        return distance_to_weir
+        distance = np.inf
+        weir = None
+        for weir in self.weirs.values():
+            weir_node = weir._node_coordinate
+            try:
+                distance_to_weir=nx.shortest_path_length(G=self.network,source=node,target=weir_node,weight='length')
+                if distance_to_weir < distance:
+                    distance = distance_to_weir
+                    weir = weir
+            except nx.NetworkXNoPath:
+                continue
+            
+        return distance, weir
 
     def draw_network(self, node_label_attr, edge_label_attr):
         
@@ -622,12 +653,6 @@ class StormWaterPipeNetwork(PipeNetwork):
     def __init__(self):
         super().__init__()
         self.network_type = "infiltratieriool"
-
-    @property
-    def network_downstream_hydraulic_head(self):
-        """Used to estimate the max hydraulic gradient"""
-        if self.weir is not None:
-            return self.weir.freeboard + self.weir.weir_level
 
     def set_invert_levels(self):
         # For IT network the gradient of the pipes is 0, find the highest possible solution

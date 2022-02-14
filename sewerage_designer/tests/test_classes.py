@@ -177,7 +177,7 @@ def test_calculate_max_hydraulic_gradient():
     weir.freeboard = 0.5
     stormwaternetwork.add_weir(weir)
     
-    stormwaternetwork.calculate_max_hydraulic_gradient(outlet_node=weir.coordinate, waking=0)
+    stormwaternetwork.calculate_max_hydraulic_gradient(waking=0)
 
     theoretical_max_hydraulic_gradient = (8-6.5)/3
     assert stormwaternetwork.pipes[0].max_hydraulic_gradient == theoretical_max_hydraulic_gradient
@@ -204,7 +204,7 @@ def test_evalute_max_hydraulic_gradient():
     weir.freeboard = 0.5
     stormwaternetwork.add_weir(weir)
     
-    stormwaternetwork.calculate_max_hydraulic_gradient(outlet_node=weir.coordinate, waking=0)
+    stormwaternetwork.calculate_max_hydraulic_gradient(waking=0)
     stormwaternetwork.evaluate_hydraulic_gradient_upstream(waking=0)
     
     assert stormwaternetwork.pipes[0].max_hydraulic_gradient == 0.25
@@ -218,8 +218,8 @@ def test_calculate_discharge():
                     accumulated_connected_surface_area = 1000,
                     max_hydraulic_gradient= 0.05)
     
-    pipe.calculate_discharge(intensity=5, timestep=300)
-    assert pipe.discharge == (5/1000/300) * 1000
+    pipe.calculate_discharge(intensity=5)
+    assert pipe.discharge == (5/1000) * 1000
     
 def test_calculate_diameter():
     
@@ -230,8 +230,8 @@ def test_calculate_diameter():
                     max_hydraulic_gradient= 0.05)
     
     # Diameter is based on colebrook white
-    pipe.calculate_diameter()
-    assert pipe.diameter == 0.5
+    pipe.calculate_diameter(vmax=1.5)
+    assert pipe.diameter == 0.315
  
 
 
