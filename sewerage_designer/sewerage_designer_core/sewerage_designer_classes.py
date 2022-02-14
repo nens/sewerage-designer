@@ -317,14 +317,17 @@ class Pipe:
         estimated_diameter = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter
 
-    def calculate_minimum_cover_depth(self, minimal_cover_depth):
+    def calculate_cover_depth(self):
         """Determine the depth """
 
         material_thickness = MATERIAL_THICKNESS[self.material]
-        minimum_cover_depth = self.lowest_elevation - (
-            minimal_cover_depth + self.diameter + material_thickness *2
+        self.start_level=6.0 #TODO: determine this based on outlet height
+        self.end_level=6.0 #TODO: determine this
+        invert_level=max(self.start_level,self.end_level) 
+        cover_depth = self.lowest_elevation - (
+            invert_level + self.diameter + material_thickness *2
         )
-        self.minimum_cover_depth = minimum_cover_depth
+        self.cover_depth=cover_depth
 
     def validate(self):
         if len(self.points) != 2:
