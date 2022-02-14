@@ -175,79 +175,106 @@ def update_field(layer,feature,field,value):
     feature[field]=value
     layer.updateFeature(feature)
 
-def network_to_layers(network,layers):
-    """general function that writes all
-    attributes of network python object back to QGIS layers
+def ccs_back_to_layers(network,layer):
+    """writes all changed fields of network python object back to QGIS sewerage layer during compute cs
     """
-    for layer in layers:
-        if layer.name() == 'sewerage':
-            fields=layer.fields().names()
-            with edit(layer):
-                for field in fields:
-                    if field=='connected_surface_area':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.connected_surface_area)
-                    elif field=='accumulated_connected_surface_area':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.accumulated_connected_surface_area)                    
-                    elif field=='elevation':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.elevation)
-                    elif field=='max_hydraulic_gradient':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.max_hydraulic_gradient)
-                    elif field=='diameter':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.diameter)
-                    elif field=='discharge':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.discharge) 
-                    elif field=='cover_depth':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.cover_depth)
-                    elif field=='material':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.material)
-                    elif field=='end_level':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.end_level)
-                    elif field=='start_level':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.start_level)    
-                    elif field=='velocity':
-                        features=get_features(layer)
-                        for feature in features:
-                            feature_fid = feature['fid']
-                            pipe = network.pipes[feature_fid]
-                            update_field(layer,feature,field,pipe.velocity)    
+    fields=layer.fields().names()
+    with edit(layer):
+        for field in fields:
+            if field=='connected_surface_area':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.connected_surface_area))
+                    print(float(pipe.connected_surface_area))
+            elif field=='accumulated_connected_surface_area':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.accumulated_connected_surface_area) )     
+                    print(float(pipe.accumulated_connected_surface_area))
+
+def cd_back_to_layers(network,layer):
+    """writes all changed fields of network python object back to QGIS sewerage layer during compute diameters
+    """
+    fields=layer.fields().names()
+    with edit(layer):
+        for field in fields:
+            if field=='max_hydraulic_gradient':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.max_hydraulic_gradient))
+                    print(float(pipe.max_hydraulic_gradient))
+            elif field=='diameter':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.diameter))
+                    print(float(pipe.diameter))
+            elif field=='discharge':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.discharge))
+                    print(float(pipe.discharge))
+            elif field=='material':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,pipe.material)
+                    print(pipe.material)
+            '''
+            elif field=='velocity':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.velocity))
+                    print(float(pipe.velocity))
+            '''
+
+def vd_back_to_layers(network,layer):
+    """writes all changed fields of network python object back to QGIS sewerage layer during validate depths
+    """
+    fields=layer.fields().names()
+    with edit(layer):
+        for field in fields:
+            if field=='cover_depth':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.cover_depth))
+                    print(float(pipe.cover_depth))
+            elif field=='end_level':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.end_level))
+                    print(float(pipe.end_level))
+            elif field=='start_level':
+                print(field)
+                features=get_features(layer)
+                for feature in features:
+                    feature_fid = feature['fid']
+                    pipe = network.pipes[feature_fid]
+                    update_field(layer,feature,field,float(pipe.start_level))
+                    print(float(pipe.start_level))
 

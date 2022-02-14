@@ -193,8 +193,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             pipe.determine_connected_surface_area(bgt_inlooptabel)
             
         self.sewerage_network.accumulate_connected_surface_area()
-        layers_list=self.get_list_of_sewerage_designer_layers()
-        network_to_layers(self.sewerage_network,layers_list)
+        sewerage_layer=self.get_map_layer('sewerage')
+        ccs_back_to_layers(self.sewerage_network,sewerage_layer)
         message='The connected surfaces are computed. You can now proceed to compute the diameters.'
         self.finished_computation_message(message)
 
@@ -222,8 +222,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             pipe.calculate_diameter(vmax)
             pipe.set_material()
             
-        layers_list=self.get_list_of_sewerage_designer_layers()
-        network_to_layers(self.sewerage_network,layers_list)
+        sewerage_layer=self.get_map_layer('sewerage')
+        cd_back_to_layers(self.sewerage_network,sewerage_layer)
         message='The diameters are computed. You can now proceed to validate/ compute the depths.'
         self.finished_computation_message(message)
         
@@ -243,6 +243,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             else:
                 validated.append(False)
         print(validated)
+        sewerage_layer=self.get_map_layer('sewerage')
+        vd_back_to_layers(self.sewerage_network,sewerage_layer)
         if all(validated):
             message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
             self.finished_computation_message(message)
