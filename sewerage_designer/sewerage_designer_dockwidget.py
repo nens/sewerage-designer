@@ -25,10 +25,12 @@
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
+from qgis import processing
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
-from qgis.PyQt.QtCore import pyqtSignal
-from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel
+from qgis.PyQt.QtCore import pyqtSignal,QVariant
+from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel,QgsField,QgsLineSymbol
+from qgis.core.additions.edit import edit
 
 from qgis_connector import *
 from sewerage_designer_core.sewerage_designer_classes import *
@@ -194,7 +196,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             
         self.sewerage_network.accumulate_connected_surface_area()
         sewerage_layer=self.get_map_layer('sewerage')
-        ccs_back_to_layers(self.sewerage_network,sewerage_layer)
+        core_to_layer(self.sewerage_network,sewerage_layer)
         message='The connected surfaces are computed. You can now proceed to compute the diameters.'
         self.finished_computation_message(message)
 
@@ -210,20 +212,19 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         self.sewerage_network=self.create_network_from_layers()
         DEM=self.get_DEM()
         self.sewerage_network.add_elevation_to_network(DEM)
-        weir=self.sewerage_network.weir
         global_settings_layer=self.get_map_layer('global_settings')
         minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
         self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
-        self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
+        #self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
         vmax=self.read_attribute_values(global_settings_layer,'maximum_velocity')[0]
         peak_intensity = self.get_final_peak_intensity_from_lineedit()
         for pipe_id, pipe in self.sewerage_network.pipes.items():
-            pipe.calculate_discharge(intensity=peak_intensity, timestep = 300)
+            pipe.calculate_discharge(intensity=peak_intensity)
             pipe.calculate_diameter(vmax)
             pipe.set_material()
             
         sewerage_layer=self.get_map_layer('sewerage')
-        cd_back_to_layers(self.sewerage_network,sewerage_layer)
+        core_to_layer(self.sewerage_network,sewerage_layer)
         message='The diameters are computed. You can now proceed to validate/ compute the depths.'
         self.finished_computation_message(message)
         
@@ -234,23 +235,68 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
         DEM=self.get_DEM()
         self.sewerage_network.add_elevation_to_network(DEM) #re-do this because user can change the DEM after compute diameters
-        validated=[]
+        validated=[];d=[]
+        self.sewerage_network.calculate_cover_depth()
         for pipe in self.sewerage_network.pipes.values():
-            pipe.calculate_cover_depth()
-            print(pipe.cover_depth)
+            d.append(pipe.diameter)
             if pipe.cover_depth>minimum_cover_depth:
                 validated.append(True)
             else:
                 validated.append(False)
-        print(validated)
         sewerage_layer=self.get_map_layer('sewerage')
-        vd_back_to_layers(self.sewerage_network,sewerage_layer)
+        core_to_layer(self.sewerage_network,sewerage_layer)
         if all(validated):
             message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
             self.finished_computation_message(message)
         else:
+            max_d=max(d)
+            self.create_layer_of_faulty_cover_depths(minimum_cover_depth,max_d)
             message='Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red.'
-            self.finished_computation_message(message)             
+            self.finished_computation_message(message)
+
+    def create_layer_of_faulty_cover_depths(self,minimum_cover_depth,max_d):
+        layer=self.get_map_layer('sewerage')
+        layer.selectAll()
+        clone=processing.run("native:saveselectedfeatures",{'INPUT':layer,'OUTPUT':'memory:'})['OUTPUT']
+        layer.removeSelection()
+        clone.setName('pipes with unsufficient cover depth')
+        clone.dataProvider().addAttributes([QgsField("minimum_cover_depth",QVariant.Double)])
+        clone.dataProvider().addAttributes([QgsField("validated?",QVariant.Bool)])
+        clone.updateFields()
+        
+        with edit(clone):            
+            field_ids=[]
+            fieldnames=set(['fid','cover_depth','minimum_cover_depth','validated?'])
+            for field in clone.fields():
+                if field.name() not in fieldnames:
+                  field_ids.append(clone.fields().indexFromName(field.name()))
+                if field.name()=='cover_depth':
+                    features=clone.getFeatures()
+                    for feature in features:
+                        cover_depth=feature['cover_depth']
+                        value=True if minimum_cover_depth<cover_depth else False
+                        if value:
+                            clone.deleteFeature(feature.id())
+                        else:
+                            feature['validated?']=QVariant(value)
+                            clone.updateFeature(feature)
+                elif field.name()=='minimum_cover_depth':
+                    features=clone.getFeatures()
+                    for feature in features:
+                        feature['minimum_cover_depth']=minimum_cover_depth
+                        clone.updateFeature(feature)
+    
+        clone.dataProvider().deleteAttributes(field_ids)
+        clone.updateFields()
+        
+        symbol=QgsLineSymbol.createSimple({'color':'red','line_width':str(max_d*9.2),'line_width_unit':'Pixel','capstyle':'round'})
+        print(symbol.symbolLayers()[0].properties())
+        clone.renderer().setSymbol(symbol)
+        clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
+        clone.triggerRepaint()
+        
+        QgsProject.instance().addMapLayer(clone)
+        
     		   	
     def filepath_create_or_load_geopackage_isChanged(self):
         gpkg=self.get_geopackage_create_or_load_path()

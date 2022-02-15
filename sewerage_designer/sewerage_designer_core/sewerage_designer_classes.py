@@ -314,20 +314,10 @@ class Pipe:
             q=self.discharge, Smax=self.max_hydraulic_gradient, sewerage_type=self.sewerage_type, v_max=vmax
         )
 
-        estimated_diameter = colebrook_white.iterate_diameters()
+        estimated_diameter,velocity = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter
+        self.velocity=velocity
 
-    def calculate_cover_depth(self):
-        """Determine the depth """
-
-        material_thickness = MATERIAL_THICKNESS[self.material]
-        self.start_level=6.0 #TODO: determine this based on outlet height
-        self.end_level=6.0 #TODO: determine this
-        invert_level=max(self.start_level,self.end_level) 
-        cover_depth = self.lowest_elevation - (
-            invert_level + self.diameter + material_thickness *2
-        )
-        self.cover_depth=cover_depth
 
     def validate(self):
         if len(self.points) != 2:
@@ -657,13 +647,22 @@ class StormWaterPipeNetwork(PipeNetwork):
         super().__init__()
         self.network_type = "infiltratieriool"
 
-    def set_invert_levels(self):
-        # For IT network the gradient of the pipes is 0, find the highest possible solution
+    def calculate_cover_depth(self):
+        """Determine the depth """
+
+        weir_level = min([weir.weir_level for weir in self.weirs.values()])
         max_diameter = max([pipe.diameter for pipe in self.pipes.values()])
-        self.network_level = self.weir.weir_level - max_diameter
+        
         for pipe in self.pipes.values():
-            pipe.invert_level_start = self.network_level
-            pipe.invert_level_end = self.network_level
+            material_thickness = MATERIAL_THICKNESS[pipe.material]        
+            pipe.start_level=weir_level - max_diameter
+            pipe.end_level=weir_level - max_diameter
+            invert_level=max(pipe.start_level,pipe.end_level) 
+            cover_depth = pipe.lowest_elevation - (
+                invert_level + pipe.diameter + material_thickness *2
+            )
+            pipe.cover_depth=cover_depth
+
                         
     def check_invert_levels(self):
         for pipe in self.pipes.values():
