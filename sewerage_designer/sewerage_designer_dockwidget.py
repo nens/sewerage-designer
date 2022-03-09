@@ -78,7 +78,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         for group in [child for child in root.children() if child.nodeType() == 0]:
             if group.name()==group_name:
                 root.removeChildNode(group)
-        group=root.addGroup(group_name) 
+        group=root.insertGroup(0,group_name)
         return group
     
     def add_layer_to_group(self,path,layername,group):       
