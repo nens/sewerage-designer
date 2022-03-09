@@ -57,7 +57,7 @@ LINE_SAMPLE_POINTS = 100
 MATERIAL_THICKNESS = {"PVC": 0.1, "Concrete": 0.2}
 
 
-class InvalidGeometryException:
+class InvalidGeometryException(Exception):
     pass
 
 
@@ -201,7 +201,7 @@ class Pipe:
     def __init__(
         self,
         wkt_geometry,
-        fid: int = None,
+        fid,
         diameter: float = None,
         start_level: float = None,
         end_level: float = None,
@@ -214,7 +214,7 @@ class Pipe:
         discharge: float = None,
         velocity: float = None,
     ):
-        self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
+        self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry) 
         self.fid = fid
         self.diameter = diameter
         self.start_level = start_level

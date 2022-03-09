@@ -1,6 +1,6 @@
 import inspect
 from osgeo import ogr,gdal
-from qgis.core import QgsFeature, QgsVectorLayer
+from qgis.core import QgsFeature, QgsVectorLayer, QgsWkbTypes
 from PyQt5.QtCore import QVariant
 from qgis.core.additions.edit import edit
 
@@ -14,10 +14,14 @@ class SewerageDesignerQgsConnector:
         pass
 
 def pipe_from_feature(feature: QgsFeature):
+    fid = feature.id()
+    geom = feature.geometry()
+    if (not geom.type() == QgsWkbTypes.LineGeometry) or geom.isMultipart():
+        raise ValueError(f"Invalid geometry type: {geom.type()} for pipe with id {fid}")
+
     wkt_geometry = feature.geometry().asWkt()
     pipe_signature = inspect.signature(Pipe).parameters
-    pipe = Pipe(wkt_geometry=wkt_geometry)
-    
+    pipe = Pipe(wkt_geometry=wkt_geometry,fid=fid)   
     for variable, parameter in pipe_signature.items():
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
