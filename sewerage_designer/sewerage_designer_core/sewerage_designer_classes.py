@@ -140,14 +140,14 @@ class Weir:
         wkt_geometry,
         fid: int = None,
         weir_level: float = None,
-        overflowing_radius: float = None,
+        crest_flow_depth: float = None,
         pipe_in_id: int = None,
         pipe_out_id: int = None,
     ):
         self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.weir_level = weir_level
         self.fid = fid
-        self.overflowing_radius = overflowing_radius
+        self.crest_flow_depth = crest_flow_depth
         self.pipe_in_id = pipe_in_id
         self.pipe_out_id = pipe_out_id
 
@@ -167,7 +167,7 @@ class Outlet:
         ditch_level: float = None,
         outlet_id: int = None,
         surface_elevation: float = None,
-        overflowing_radius: float = None,
+        crest_flow_depth: float = None,
         pipe_in_id: int = None,
         pipe_out_id: int = None,
         hydraulic_head: float = None,
@@ -176,7 +176,7 @@ class Outlet:
         self.ditch_level = ditch_level
         self.outlet_id = outlet_id
         self.surface_elevation = surface_elevation
-        self.overflowing_radius = overflowing_radius
+        self.crest_flow_depth = crest_flow_depth
         self.pipe_in_id = pipe_in_id
         self.pipe_out_id = pipe_out_id
         self.hydraulic_head = hydraulic_head
@@ -365,7 +365,7 @@ class PipeNetwork:
     def network_upstream_hydraulic_head(self):
         """Used to estimate the max hydraulic gradient"""
         if self.weir is not None:
-            return self.weir.overflowing_radius + self.weir.weir_level
+            return self.weir.crest_flow_depth + self.weir.weir_level
 
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
@@ -456,7 +456,7 @@ class PipeNetwork:
 
             hydraulic_gradient = (
                 (furthest_pipe.start_elevation + waking)
-                - (weir.weir_level + weir.overflowing_radius)
+                - (weir.weir_level + weir.crest_flow_depth)
             ) / distance
             
             hydraulic_gradients += [hydraulic_gradient]
@@ -481,7 +481,7 @@ class PipeNetwork:
             print('start_node='f"{start_node}")
             print('distance_to_weir='f"{distance_to_weir}")
             hydraulic_head = (
-                (closest_weir.weir_level + closest_weir.overflowing_radius)
+                (closest_weir.weir_level + closest_weir.crest_flow_depth)
                 + pipe.max_hydraulic_gradient * distance_to_weir
             )
             print('hydraulic_head='f"{hydraulic_head}")
