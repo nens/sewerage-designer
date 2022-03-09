@@ -136,13 +136,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
 
     def info_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Info",message)
+        QtWidgets.QMessageBox.about(self,"Info",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')
         
     def finished_computation_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Computation finished",message)
+        QtWidgets.QMessageBox.about(self,"Computation finished",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')
         
     def something_went_wrong_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Something went wrong",message)        
+        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')        
 
     def get_sewerage_designer_layers(self):
         #get and check if all required SewerageDesigner layers exist in QGIS project
@@ -174,9 +174,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         intensity=self.get_final_peak_intensity_from_lineedit()
         check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
         if not intensity==check_intensity:
-            response=QtWidgets.QMessageBox.question(self,'Warning',('Peak intensity 'f"{intensity}"' mm/5min '
-                                                        'does not match the peak intensity of the '
-                                                        'design event. Want to continue?'),
+            message='Peak intensity 'f"{intensity}"' mm/5min '
+            'does not match the peak intensity of the '
+            'design event. Want to continue?'
+            response=QtWidgets.QMessageBox.question(self,'Warning',('<FONT COLOR=''#ffffff>'f"{message}"'</FONT>'),
                                                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
                                                     QtWidgets.QMessageBox.Cancel)
         return response

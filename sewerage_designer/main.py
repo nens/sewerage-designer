@@ -51,7 +51,7 @@ if __name__ == '__main__':
     weir_levels = [6, 6.1]
     for i, weir in enumerate(weirs):
         weir = Weir(weir, i)
-        weir.freeboard = 0.1
+        weir.overflowing_radius = 0.1
         weir.weir_level = weir_levels[i]
         stormwater_network.add_weir(weir)
     
@@ -155,7 +155,7 @@ if __name__ == '__main__':
         weir_node = weir._node_coordinate
         
         # Set the hydraulic gradient at the weir node
-        node_attrs = {weir_node:{'hydraulic_head': weir.weir_level + weir.freeboard}}
+        node_attrs = {weir_node:{'hydraulic_head': weir.weir_level + weir.overflowing_radius}}
         nx.set_node_attributes(stormwater_network.network, node_attrs)
         
         _ = upstream_hydraulic_gradient(weir_node)
