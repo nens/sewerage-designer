@@ -176,19 +176,18 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
     network.add_id_to_nodes()
 
     cycles = nx.simple_cycles(network.network)   
+    loop_pipe_fids = []
+    loop = False
     if sum(1 for _ in cycles) > 0:
         cycles = nx.simple_cycles(network.network)   
-        pipe_fids = []
         for cycle in cycles:
             for i in range(0,len(cycle)-1):
                 edge = (cycle[i], cycle[i+1])
                 pipe = network.get_pipe_with_edge(edge)
-                pipe_fids += [pipe.fid]
-        
-        print(pipe_fids)
-        raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
+                loop_pipe_fids += [pipe.fid]
+        loop=True
     
-    return network
+    return network,loop,loop_pipe_fids
 
 def update_field(layer,feature,field,value):
     feature[field]=value
@@ -197,6 +196,7 @@ def update_field(layer,feature,field,value):
 def core_to_layer(network,layer):
     """writes all changed fields of network python object back to QGIS sewerage layer
     """
+    empty_accumulated_fields=[]
     fields=layer.fields().names()
     with edit(layer):
         for field in fields:
@@ -212,8 +212,11 @@ def core_to_layer(network,layer):
                 for feature in features:
                     feature_fid = feature['fid']
                     pipe = network.pipes[feature_fid]
-                    if pipe.accumulated_connected_surface_area is not None:
+                    val = [None,0]
+                    if pipe.accumulated_connected_surface_area not in val:
                         update_field(layer,feature,field,round(float(pipe.accumulated_connected_surface_area),2))
+                    else:
+                        empty_accumulated_fields.append(feature_fid)
             elif field=='max_hydraulic_gradient':
                 features=get_features(layer)
                 for feature in features:
@@ -270,4 +273,4 @@ def core_to_layer(network,layer):
                     pipe = network.pipes[feature_fid]
                     if pipe.start_level is not None:
                         update_field(layer,feature,field,round(float(pipe.start_level),2))
-
+    return empty_accumulated_fields

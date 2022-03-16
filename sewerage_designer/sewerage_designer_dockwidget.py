@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-
+import traceback
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
@@ -142,7 +142,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         QtWidgets.QMessageBox.about(self,"Computation finished",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')
         
     def something_went_wrong_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')        
+        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#d6d6d6>'f"{message}"'</FONT>')        
 
     def get_sewerage_designer_layers(self):
         #get and check if all required SewerageDesigner layers exist in QGIS project
@@ -166,41 +166,97 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             
     def create_network_from_layers(self):
         global_settings_layer,pipe_layer,weir_layer,pumping_station_layer,outlet_layer=self.get_sewerage_designer_layers()
-        network=create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
-        return network
+        network,loop,loop_pipe_fids=create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer)
+        return network,loop,loop_pipe_fids
             
     def check_input(self):
         response=QtWidgets.QMessageBox.Yes #by definition if not changed
         intensity=self.get_final_peak_intensity_from_lineedit()
         check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
         if not intensity==check_intensity:
-            message='Peak intensity 'f"{intensity}"' mm/5min '
-            'does not match the peak intensity of the '
-            'design event. Want to continue?'
-            response=QtWidgets.QMessageBox.question(self,'Warning',('<FONT COLOR=''#ffffff>'f"{message}"'</FONT>'),
-                                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
-                                                    QtWidgets.QMessageBox.Cancel)
+            box=QtWidgets.QMessageBox()
+            message='Peak intensity 'f"{intensity}"' mm/5min does not match the peak intensity of the design event. Want to continue?'
+            styled_message='<FONT COLOR=''#ffffff>'f"{message}"'</FONT>'
+            response=box.question(self,'Warning',styled_message,
+                                  QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                                  QtWidgets.QMessageBox.Cancel)
+
         return response
 
     def compute_CS(self):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
-        self.sewerage_network=self.create_network_from_layers()
         try:
-            bgt_inlooptabel_fn=self.get_BGT_inlooptabel()
-        except:
-            message='BGT inlooptabel not defined.'
-            self.something_went_wrong_message(message)          
-        bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
-        for pipe in self.sewerage_network.pipes.values():
-            pipe.connected_surface_area = 0.0
-            pipe.determine_connected_surface_area(bgt_inlooptabel)
+            self.sewerage_network,loop,loop_pipe_fids=self.create_network_from_layers()
+            if loop:
+                message=f"Network has a loop, pipe FIDs: {loop_pipe_fids}"
+                self.something_went_wrong_message(message)
+                sewerage_layer=self.get_map_layer('sewerage')
+                clone=self.make_clone(sewerage_layer,loop_pipe_fids,'pipes that form a loop')
+                with edit(clone):            
+                    field_ids=[]
+                    fieldnames=set(['fid'])
+                    for field in clone.fields():
+                        if field.name() not in fieldnames:
+                          field_ids.append(clone.fields().indexFromName(field.name()))
+                    
+                symbol=QgsLineSymbol.createSimple({'color':'red','capstyle':'round'})
+                clone.renderer().setSymbol(symbol)
+                clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
+                clone.triggerRepaint()
             
-        self.sewerage_network.accumulate_connected_surface_area()
-        sewerage_layer=self.get_map_layer('sewerage')
-        core_to_layer(self.sewerage_network,sewerage_layer)
-        message='The connected surfaces are computed. You can now proceed to compute the diameters.'
-        self.finished_computation_message(message)
+                clone.dataProvider().deleteAttributes(field_ids)
+                clone.updateFields()                
+                QgsProject.instance().addMapLayer(clone)
+                clone.selectAll()
+                iface.actionZoomToSelected().trigger() 
+                clone.removeSelection() 
+                
+                return
+            
+            try:
+                bgt_inlooptabel_fn=self.get_BGT_inlooptabel()
+            except:
+                message='BGT inlooptabel not defined.'
+                self.something_went_wrong_message(message)          
+            bgt_inlooptabel=BGTInloopTabel(bgt_inlooptabel_fn)
+            for pipe in self.sewerage_network.pipes.values():
+                pipe.connected_surface_area = 0.0
+                pipe.determine_connected_surface_area(bgt_inlooptabel)
+                
+            self.sewerage_network.accumulate_connected_surface_area()
+            sewerage_layer=self.get_map_layer('sewerage')
+            pipes_with_empty_accumulated_fields=core_to_layer(self.sewerage_network,sewerage_layer)
+            if not pipes_with_empty_accumulated_fields:
+                message='The connected surfaces are computed. You can now proceed to compute the diameters.'
+                self.finished_computation_message(message)
+            else: #we have some zeros accumulated connected surfaces
+                message=f"Some pipes have no accumulated connected surfaces, pipe FIDs: {pipes_with_empty_accumulated_fields}"
+                self.something_went_wrong_message(message)
+                sewerage_layer=self.get_map_layer('sewerage')
+                clone=self.make_clone(sewerage_layer,pipes_with_empty_accumulated_fields,'pipes with no accumulated connected surfaces')
+                with edit(clone):            
+                    field_ids=[]
+                    fieldnames=set(['fid','accumulated_connected_surface_area'])
+                    for field in clone.fields():
+                        if field.name() not in fieldnames:
+                          field_ids.append(clone.fields().indexFromName(field.name()))
+                    
+                symbol=QgsLineSymbol.createSimple({'color':'red','capstyle':'round'})
+                clone.renderer().setSymbol(symbol)
+                clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
+                clone.triggerRepaint()
+            
+                clone.dataProvider().deleteAttributes(field_ids)
+                clone.updateFields()                
+                QgsProject.instance().addMapLayer(clone) 
+                clone.selectAll()
+                iface.actionZoomToSelected().trigger() 
+                clone.removeSelection() 
+
+        except Exception as ex:
+            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            self.something_went_wrong_message(message)
 
     def read_attribute_values(self,layer,field):
         "return alls attribute values of a certain field of certain layer"
@@ -211,50 +267,95 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
 
     def compute_diameters(self):
         """Compute diameters for the current network and design rainfall event"""
-        self.sewerage_network=self.create_network_from_layers()
-        DEM=self.get_DEM()
-        self.sewerage_network.add_elevation_to_network(DEM)
-        global_settings_layer=self.get_map_layer('global_settings')
-        minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
-        self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
-        #self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
-        vmax=self.read_attribute_values(global_settings_layer,'maximum_velocity')[0]
-        peak_intensity = self.get_final_peak_intensity_from_lineedit()
-        for pipe_id, pipe in self.sewerage_network.pipes.items():
-            pipe.calculate_discharge(intensity=peak_intensity)
-            pipe.calculate_diameter(vmax)
-            pipe.set_material()
+        try:
+            self.sewerage_network,loop,loop_pipe_fids=self.create_network_from_layers()
+            DEM=self.get_DEM()
+            self.sewerage_network.add_elevation_to_network(DEM)
+            global_settings_layer=self.get_map_layer('global_settings')
+            minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
+            self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
+            #self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
+            vmax=self.read_attribute_values(global_settings_layer,'maximum_velocity')[0]
+            peak_intensity = self.get_final_peak_intensity_from_lineedit()
             
-        sewerage_layer=self.get_map_layer('sewerage')
-        core_to_layer(self.sewerage_network,sewerage_layer)
-        message='The diameters are computed. You can now proceed to validate/ compute the depths.'
-        self.finished_computation_message(message)
+            velocity_to_high_pipe_fids=[];d=[]
+            for pipe_id, pipe in self.sewerage_network.pipes.items():
+                pipe.calculate_discharge(intensity=peak_intensity)
+                pipe.calculate_diameter(vmax)
+                d.append(pipe.diameter)
+                pipe.set_material()
+                if pipe.velocity_to_high:
+                    velocity_to_high_pipe_fids.append(pipe_id)
+                
+            sewerage_layer=self.get_map_layer('sewerage')
+            core_to_layer(self.sewerage_network,sewerage_layer)
+            if not velocity_to_high_pipe_fids:
+                message='The diameters are computed. You can now proceed to validate/ compute the depths.'
+                self.finished_computation_message(message)
+            else:
+                message=f"The velocity in some pipes is too large, pipe FIDs: {velocity_to_high_pipe_fids}"
+                self.something_went_wrong_message(message)
+                sewerage_layer=self.get_map_layer('sewerage')
+                clone=self.make_clone(sewerage_layer,velocity_to_high_pipe_fids,'pipes with excessive velocities')
+                with edit(clone):            
+                    field_ids=[]
+                    fieldnames=set(['fid','velocity'])
+                    for field in clone.fields():
+                        if field.name() not in fieldnames:
+                          field_ids.append(clone.fields().indexFromName(field.name()))
+                    
+                symbol=QgsLineSymbol.createSimple({'color':'red','line_width':str((max(d))*9.2),'line_width_unit':'Pixel','capstyle':'round'})
+                clone.renderer().setSymbol(symbol)
+                clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
+                clone.triggerRepaint()
+            
+                clone.dataProvider().deleteAttributes(field_ids)
+                clone.updateFields()                
+                QgsProject.instance().addMapLayer(clone)
+                clone.selectAll()
+                iface.actionZoomToSelected().trigger() 
+                clone.removeSelection() 
+                
+        except Exception as ex:
+            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            self.something_went_wrong_message(message)
+
+    def make_clone(self,layer,features_to_be_cloned,name):
+        layer.select(features_to_be_cloned)
+        clone=processing.run("native:saveselectedfeatures",{'INPUT':layer,'OUTPUT':'memory:'})['OUTPUT']
+        layer.removeSelection()
+        clone.setName(name)      
+        return clone       
         
     def validate_depths(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
-        self.sewerage_network=self.create_network_from_layers()
-        global_settings_layer=self.get_map_layer('global_settings')
-        minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
-        DEM=self.get_DEM()
-        self.sewerage_network.add_elevation_to_network(DEM) #re-do this because user can change the DEM after compute diameters
-        validated=[];d=[]
-        self.sewerage_network.calculate_cover_depth()
-        for pipe in self.sewerage_network.pipes.values():
-            d.append(pipe.diameter)
-            if pipe.cover_depth>minimum_cover_depth:
-                validated.append(True)
+        try:
+            self.sewerage_network,loop,loop_pipe_fids=self.create_network_from_layers()
+            global_settings_layer=self.get_map_layer('global_settings')
+            minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
+            DEM=self.get_DEM()
+            self.sewerage_network.add_elevation_to_network(DEM) #re-do this because user can change the DEM after compute diameters
+            validated=[];d=[]
+            self.sewerage_network.calculate_cover_depth()
+            for pipe in self.sewerage_network.pipes.values():
+                d.append(pipe.diameter)
+                if pipe.cover_depth>minimum_cover_depth:
+                    validated.append(True)
+                else:
+                    validated.append(False)
+            sewerage_layer=self.get_map_layer('sewerage')
+            core_to_layer(self.sewerage_network,sewerage_layer)
+            if all(validated):
+                message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
+                self.finished_computation_message(message)
             else:
-                validated.append(False)
-        sewerage_layer=self.get_map_layer('sewerage')
-        core_to_layer(self.sewerage_network,sewerage_layer)
-        if all(validated):
-            message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
-            self.finished_computation_message(message)
-        else:
-            max_d=max(d)
-            self.create_layer_of_faulty_cover_depths(minimum_cover_depth,max_d)
-            message='Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red.'
-            self.finished_computation_message(message)
+                max_d=max(d)
+                self.create_layer_of_faulty_cover_depths(minimum_cover_depth,max_d)
+                message='Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red.'
+                self.finished_computation_message(message)
+        except Exception as ex:
+            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            self.something_went_wrong_message(message)
 
     def create_layer_of_faulty_cover_depths(self,minimum_cover_depth,max_d):
         layer=self.get_map_layer('sewerage')
@@ -292,12 +393,15 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         clone.updateFields()
         
         symbol=QgsLineSymbol.createSimple({'color':'red','line_width':str(max_d*9.2),'line_width_unit':'Pixel','capstyle':'round'})
-        print(symbol.symbolLayers()[0].properties())
         clone.renderer().setSymbol(symbol)
         clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
         clone.triggerRepaint()
         
         QgsProject.instance().addMapLayer(clone)
+        clone.selectAll()
+        iface.actionZoomToSelected().trigger() 
+        clone.removeSelection()
+
         
     		   	
     def filepath_create_or_load_geopackage_isChanged(self):
