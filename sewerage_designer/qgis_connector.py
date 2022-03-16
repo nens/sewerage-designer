@@ -1,5 +1,6 @@
 import inspect
 from osgeo import ogr,gdal
+import networkx as nx
 from qgis.core import QgsFeature, QgsVectorLayer, QgsWkbTypes
 from PyQt5.QtCore import QVariant
 from qgis.core.additions.edit import edit
@@ -173,6 +174,20 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
             network.add_pumping_station(pumping_station)
     
     network.add_id_to_nodes()
+
+    cycles = nx.simple_cycles(network.network)   
+    if sum(1 for _ in cycles) > 0:
+        cycles = nx.simple_cycles(network.network)   
+        pipe_fids = []
+        for cycle in cycles:
+            for i in range(0,len(cycle)-1):
+                edge = (cycle[i], cycle[i+1])
+                pipe = network.get_pipe_with_edge(edge)
+                pipe_fids += [pipe.fid]
+        
+        print(pipe_fids)
+        raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
+    
     return network
 
 def update_field(layer,feature,field,value):

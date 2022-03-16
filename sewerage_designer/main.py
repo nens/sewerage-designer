@@ -8,18 +8,17 @@ import json
 from sewerage_designer_core.constants import *
 from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
 
-
 if __name__ == '__main__':
     
-    pipe_ds = ogr.Open('./tests/test_data/test_pipes_mesh_design_multiple_weirs.gpkg')
-    pipe_layer = pipe_ds.GetLayer(0)
+    pipe_ds = ogr.Open(r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\sewerage_designer_ontwerp_bas_v0_SINGLEPART.gpkg')
+    pipe_layer = pipe_ds.GetLayer('sewerage')
 
     # Settings
     network_type = 'infiltratieriool'
     design_rain = 'Bui10'
     waking = 0
     dem = './tests/test_data/Zundert.tif'
-    bgt_inlooptabel_file = './tests/test_data/bgt_inlooptabel_test_mesh_design_2.gpkg'
+    bgt_inlooptabel_file = r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\bgt_inlooptabel_zundert.gpkg'
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
@@ -41,6 +40,17 @@ if __name__ == '__main__':
         
     stormwater_network.add_id_to_nodes()
     
+    pipe_fids = []
+    cycles = nx.simple_cycles(stormwater_network.network)
+    for cycle in cycles:
+        for i in range(0,len(cycle)-1):
+            edge = (cycle[i], cycle[i+1])
+            pipe = stormwater_network.get_pipe_with_edge(edge)
+            pipe_fids += [pipe.fid]
+            
+    string = 'asdfdas {}'.format(pipe_fids)
+    print(string)
+    
     # Add an weir
     # We can use the final pipe's coordinate
     weir_1 = stormwater_network.pipes[43].end_coordinate
@@ -56,9 +66,9 @@ if __name__ == '__main__':
         stormwater_network.add_weir(weir)
     
     # Determine connected surface areas and the max hydraulic gradient for the whole network
-    # bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
-    # for pipe in stormwater_network.pipes.values():
-    #     pipe.determine_connected_surface_area(bgt_inlooptabel)
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
+    for pipe in stormwater_network.pipes.values():
+        pipe.determine_connected_surface_area(bgt_inlooptabel)
 
     # Network connected surface area    
     stormwater_network.accumulate_connected_surface_area()
@@ -67,7 +77,7 @@ if __name__ == '__main__':
 
     # Calculate the capacity for all the pipes
     for pipe_id, pipe in stormwater_network.pipes.items():
-        pipe.calculate_discharge(intensity=0.01, timestep = 300)
+        pipe.calculate_discharge(intensity=0.01)
         pipe.calculate_diameter()
         pipe.set_material()
         
@@ -76,7 +86,7 @@ if __name__ == '__main__':
     stormwater_network.check_invert_levels()
     
     # Draw network with a property
-    stormwater_network.draw_network(node_label_attr='id', edge_label_attr='diameter')
+    stormwater_network.draw_network(node_label_attr='id', edge_label_attr='fid')
     
 
     # Hydraulic gradient calculations 
@@ -85,11 +95,18 @@ if __name__ == '__main__':
     
     # Get all weirs (out-degree=0) nodes in the network
     # Calculate the hydraulic gradient to the furthest upstream point
+    # Calculate the hydraulic head at it's predecessors
+    # If the hydraulic head at the end of the pipe is lower than the lowest elevation
+        # Set the end hydraulic head to the lowest elevation
+        # Walk the network downstream using this hydraulic head and
     # Walk the network upstream from each of these nodes
     # At each pipe, calculate if the estmated hydraulic gradient is sufficient for it's lowest elevation
     # If not, lower the gradient for all downstream pipes
     # Calculate what the new hydraulic head will be at the start of the pipe
     # Calculate the new hydraulic gradient for upstream pipes using the new hydraulic head
+    
+    def calculate_hydraulic_head_upstream():
+        pass
     
     def upstream_hydraulic_gradient(node):
 
@@ -126,9 +143,7 @@ if __name__ == '__main__':
                 
                 if upstream_hydraulic_head > pipe.lowest_elevation:
                     upstream_hydraulic_head = pipe.lowest_elevation
-                    
-
-                
+    
                 head_difference = (pipe.lowest_elevation - waking) - upstream_hydraulic_head
                 if head_difference < 0:
                     hydraulic_gradient = hydraulic_gradient - (
@@ -140,7 +155,6 @@ if __name__ == '__main__':
                 node_attrs = {upstream_node:{'hydraulic_head': upstream_hydraulic_head}}
                 nx.set_node_attributes(stormwater_network.network, node_attrs)
                 
-
                 edge_attrs = {upstream_node:{'max_hydraulic_gradient': hydraulic_gradient}}
                 nx.set_edge_attributes(stormwater_network.network, edge_attrs)
             

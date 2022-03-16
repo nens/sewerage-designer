@@ -117,15 +117,11 @@ class BGTInloopTabel:
         surface_areas = []
         for i, code in enumerate(pipe_type_codes):
             if str(code) == str(pipe_code):
-                bgt_identificatie = self._table["bgt_identificatie"][i]
+                surface_area_bgt = self._table["surface_area"][i]
+                surface_fraction = self._table[pipe_type][i] / 100
+                connected_area = surface_area_bgt * surface_fraction
 
-                if bgt_identificatie not in self.connected_surfaces:
-                    surface_area_bgt = self._table["surface_area"][i]
-                    surface_fraction = self._table[pipe_type][i] / 100
-                    connected_area = surface_area_bgt * surface_fraction
-
-                    surface_areas.append(connected_area)
-                    self.connected_surfaces.append(bgt_identificatie)
+                surface_areas.append(connected_area)
 
         surface_sum = sum(surface_areas)
         return surface_sum
@@ -441,7 +437,7 @@ class PipeNetwork:
         # Calculate the new hydraulic gradient for upstream pipes using the new hydraulic head
 
         # Get the distance dictionary for the end node
-        hydraulic_gradients = []
+        hydraulic_gradients = {}
         for weir in self.weirs.values():
             weir_node = weir._node_coordinate
             distance_dictionary = self.distance_matrix_reversed[weir_node][0]
@@ -458,6 +454,8 @@ class PipeNetwork:
                 (furthest_pipe.start_elevation + waking)
                 - (weir.weir_level + weir.crest_flow_depth)
             ) / distance
+            
+            # for each upstream pipe, assign hydraulic gradient
             
             hydraulic_gradients += [hydraulic_gradient]
 
