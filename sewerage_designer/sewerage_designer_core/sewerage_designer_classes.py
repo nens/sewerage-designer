@@ -439,35 +439,35 @@ class PipeNetwork:
         # Get the distance dictionary for the end node
         hydraulic_gradients = {}
         for weir in self.weirs.values():
+            print(weir)
             weir_node = weir._node_coordinate
             distance_dictionary = self.distance_matrix_reversed[weir_node][0]
             furthest_node, distance = list(distance_dictionary.items())[-1]
             furthest_edge = list(self.network.edges(furthest_node))[0]
             furthest_pipe = self.get_pipe_with_edge(furthest_edge)
-            print('weir_coodinate='f"{weir_node}")
-            print('distance_dictionary='f"{distance_dictionary}")
-            print('distance='f"{distance}")
-            print('furthest_node='f"{furthest_node}")
-            print('furthest_edge='f"{furthest_edge}")
 
             hydraulic_gradient = (
                 (furthest_pipe.start_elevation + waking)
                 - (weir.weir_level + weir.crest_flow_depth)
             ) / distance
             
-            # for each upstream pipe, assign hydraulic gradient
+            print(hydraulic_gradient)
             
-            hydraulic_gradients += [hydraulic_gradient]
-
-        print('waking='f"{waking}")
-        print('furthest_pipe.start_elevation='f"{furthest_pipe.start_elevation}")
-        print(hydraulic_gradients)
-        max_hydraulic_gradient = min(hydraulic_gradients)
-        print('max_hydraulic_gradient='f"{max_hydraulic_gradient}")
-
-        self.max_hydraulic_gradient = max_hydraulic_gradient
-        for pipe in self.pipes:
-            setattr(self.pipes[pipe], "max_hydraulic_gradient", max_hydraulic_gradient)
+            # for each upstream pipe, assign hydraulic gradient
+            upstream_pipes = self.find_upstream_pipes(weir_node)
+            
+            for pipe in upstream_pipes:
+                print(pipe.fid)
+                if pipe.fid not in hydraulic_gradients:
+                    hydraulic_gradients[pipe.fid] = []
+                    hydraulic_gradients[pipe.fid] += [hydraulic_gradient]
+                else:
+                    hydraulic_gradients[pipe.fid] += [hydraulic_gradient]                    
+            
+        for pipe_fid in self.pipes:
+            pipe = self.pipes[pipe_fid]
+            max_hydraulic_gradient = min(hydraulic_gradients[pipe_fid])
+            setattr(self.pipes[pipe_fid], "max_hydraulic_gradient", max_hydraulic_gradient)
 
     def evaluate_hydraulic_gradient_upstream(self, waking):
         """Evaluate the maximum hydraulic gradient for each pipe in the network based on it's elevation"""
@@ -591,6 +591,7 @@ class PipeNetwork:
         upstream_edges = nx.edge_dfs(self.network, node, orientation="reverse")
         upstream_pipes = []
         for edge in upstream_edges:
+            edge = (edge[0], edge[1])
             pipe = self.get_pipe_with_edge(edge)
             upstream_pipes.append(pipe)
 

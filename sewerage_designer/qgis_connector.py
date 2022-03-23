@@ -113,6 +113,36 @@ def check_sewer_type(pipe_features):
     sewerage_type = sewerage_types.pop()        
     return sewerage_type
 
+
+def validate_network(network):
+    # Check for loops in the network        
+    cycles = nx.simple_cycles(network.network)   
+    if sum(1 for _ in cycles) > 0:
+        cycles = nx.simple_cycles(network.network)   
+        pipe_fids = []
+        for cycle in cycles:
+            for i in range(0,len(cycle)-1):
+                edge = (cycle[i], cycle[i+1])
+                pipe = network.get_pipe_with_edge(edge)
+                pipe_fids += [pipe.fid]
+        
+        print(pipe_fids)
+        raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
+        
+    # Check if all pipes in the network are connected to a weir
+    # If not, this will break the hydraulic gradient calculation
+    pipes_without_weir = []
+    for edge in network.network.edges():
+        start_node = edge[0]
+        distance, weir = network.find_closest_weir(start_node)
+        if weir is None:
+            pipe = network.get_pipe_with_edge(edge)
+            pipes_without_weir += [pipe.fid]
+        
+    if len(pipes_without_weir)> 0:
+        raise ValueError('Network contains pipes that do not have an outlet: {}'.format(pipes_without_weir))
+    
+
 def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer):
     """
     Assumptions: 
@@ -174,19 +204,7 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
             network.add_pumping_station(pumping_station)
     
     network.add_id_to_nodes()
-
-    cycles = nx.simple_cycles(network.network)   
-    if sum(1 for _ in cycles) > 0:
-        cycles = nx.simple_cycles(network.network)   
-        pipe_fids = []
-        for cycle in cycles:
-            for i in range(0,len(cycle)-1):
-                edge = (cycle[i], cycle[i+1])
-                pipe = network.get_pipe_with_edge(edge)
-                pipe_fids += [pipe.fid]
-        
-        print(pipe_fids)
-        raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
+    validate_network(network)
     
     return network
 
