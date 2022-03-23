@@ -116,32 +116,27 @@ def check_sewer_type(pipe_features):
 
 def validate_network(network):
     # Check for loops in the network
+    pipes_in_loop = []
     cycles = nx.simple_cycles(network.network)
     if sum(1 for _ in cycles) > 0:
         cycles = nx.simple_cycles(network.network)
-        pipe_fids = []
         for cycle in cycles:
             for i in range(0,len(cycle)-1):
                 edge = (cycle[i], cycle[i+1])
                 pipe = network.get_pipe_with_edge(edge)
-                pipe_fids += [pipe.fid]
-
-        print(pipe_fids)
-        raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
+                pipes_in_loop += [pipe.fid]
 
     # Check if all pipes in the network are connected to a weir
     # If not, this will break the hydraulic gradient calculation
     pipes_without_weir = []
     for edge in network.network.edges():
-        start_node = edge[0]
-        distance, weir = network.find_closest_weir(start_node)
+        end_node = edge[1]
+        distance, weir = network.find_closest_weir(end_node)
         if weir is None:
             pipe = network.get_pipe_with_edge(edge)
             pipes_without_weir += [pipe.fid]
 
-    if len(pipes_without_weir)> 0:
-        raise ValueError('Network contains pipes that do not have an outlet: {}'.format(pipes_without_weir))
-
+    return pipes_in_loop, pipes_without_weir
 
 def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer):
     """
@@ -204,9 +199,14 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
             network.add_pumping_station(pumping_station)
 
     network.add_id_to_nodes()
-    validate_network(network)
+    pipes_in_loop, pipes_without_weir = validate_network(network)
+    
+    if len(pipes_in_loop)>0 or len(pipes_without_weir)>0:
+        fault_network = True
+    else:
+        fault_network = False
 
-    return network,loop,loop_pipe_fids
+    return network, pipes_in_loop, pipes_without_weir, fault_network
 
 def update_field(layer,feature,field,value):
     feature[field]=value
@@ -223,16 +223,18 @@ def core_to_layer(network,layer):
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.connected_surface_area is not None:
+                    if pipe.connected_surface_area is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.connected_surface_area),2))
             elif field=='accumulated_connected_surface_area':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
                     val = [None,0]
-                    if pipe.accumulated_connected_surface_area not in val:
+                    if pipe.accumulated_connected_surface_area not in val and feature_update:
                         update_field(layer,feature,field,round(float(pipe.accumulated_connected_surface_area),2))
                     else:
                         empty_accumulated_fields.append(feature_fid)
@@ -240,56 +242,64 @@ def core_to_layer(network,layer):
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.max_hydraulic_gradient is not None:
+                    if pipe.max_hydraulic_gradient is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.max_hydraulic_gradient),5))
             elif field=='diameter':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.diameter is not None:
+                    if pipe.diameter is not None and feature_update:
                         update_field(layer,feature,field,float(pipe.diameter))
             elif field=='discharge':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.discharge is not None:
+                    if pipe.discharge is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.discharge),5))
             elif field=='material':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.material is not None:
+                    if pipe.material is not None and feature_update:
                         update_field(layer,feature,field,pipe.material)
             elif field=='velocity':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.velocity is not None:
+                    if pipe.velocity is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.velocity),3))
             elif field=='cover_depth':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.cover_depth is not None:
+                    if pipe.cover_depth is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.cover_depth),2))
             elif field=='end_level':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.end_level is not None:
+                    if pipe.end_level is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.end_level),2))
             elif field=='start_level':
                 features=get_features(layer)
                 for feature in features:
                     feature_fid = feature['fid']
+                    feature_update = feature['update']
                     pipe = network.pipes[feature_fid]
-                    if pipe.start_level is not None:
+                    if pipe.start_level is not None and feature_update:
                         update_field(layer,feature,field,round(float(pipe.start_level),2))
     return empty_accumulated_fields

@@ -605,18 +605,18 @@ class PipeNetwork:
         """Get the distance to the closest weir from a node in the network"""
         
         distance = np.inf
-        weir = None
+        closest_weir = None
         for weir in self.weirs.values():
             weir_node = weir._node_coordinate
             try:
                 distance_to_weir=nx.shortest_path_length(G=self.network,source=node,target=weir_node,weight='length')
                 if distance_to_weir < distance:
                     distance = distance_to_weir
-                    weir = weir
+                    closest_weir = weir
             except nx.NetworkXNoPath:
                 continue
             
-        return distance, weir
+        return distance, closest_weir
 
     def draw_network(self, node_label_attr, edge_label_attr):
         
@@ -652,21 +652,34 @@ class StormWaterPipeNetwork(PipeNetwork):
 
     def calculate_cover_depth(self):
         """Determine the depth """
-
-        weir_level = min([weir.weir_level for weir in self.weirs.values()])
-        max_diameter = max([pipe.diameter for pipe in self.pipes.values()])
         
-        for pipe in self.pipes.values():
-            material_thickness = MATERIAL_THICKNESS[pipe.material]        
-            pipe.start_level=weir_level - max_diameter
-            pipe.end_level=weir_level - max_diameter
-            invert_level=max(pipe.start_level,pipe.end_level) 
-            cover_depth = pipe.lowest_elevation - (
-                invert_level + pipe.diameter + material_thickness *2
-            )
-            pipe.cover_depth=cover_depth
+        undirected_network = self.network.to_undirected()
+        subgraphs = nx.weakly_connected_component_subgraphs(self.network)
+        
+        for subgraph in subgraphs:
+            subgraph_edges = subgraph.edges
+            network_pipes = []
+            lowest_weir_height = np.inf
+            for edge in subgraph_edges:
+                _, closest_weir = self.find_closest_weir(edge[1])
+                pipe = self.get_pipe_with_edge(edge)
+                network_pipes += [pipe]
+                
+                if closest_weir.weir_level < lowest_weir_height:
+                    lowest_weir_height = closest_weir.weir_level
 
-                        
+            max_diameter = max([pipe.diameter for pipe in network_pipes])
+            
+            for pipe in network_pipes:                
+                material_thickness = MATERIAL_THICKNESS[pipe.material]        
+                pipe.start_level=lowest_weir_height - max_diameter
+                pipe.end_level=lowest_weir_height - max_diameter
+                invert_level=max(pipe.start_level,pipe.end_level) 
+                cover_depth = pipe.lowest_elevation - (
+                    invert_level + pipe.diameter + material_thickness *2
+                )
+                pipe.cover_depth=cover_depth
+            
     def check_invert_levels(self):
         for pipe in self.pipes.values():
             if pipe.invert_level_start > pipe.minimum_cover_depth:
