@@ -101,7 +101,7 @@ class ColebrookWhite:
             print('calc_vmax='f"{self.vmax}")
             Scalc = self.colebrook_white()
             print('colebrook_white_Scalc='f"{Scalc}")
-        
+
         return self.D_design,self.vmax
         
         

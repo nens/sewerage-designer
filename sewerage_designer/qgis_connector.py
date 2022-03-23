@@ -22,7 +22,7 @@ def pipe_from_feature(feature: QgsFeature):
 
     wkt_geometry = feature.geometry().asWkt()
     pipe_signature = inspect.signature(Pipe).parameters
-    pipe = Pipe(wkt_geometry=wkt_geometry,fid=fid)   
+    pipe = Pipe(wkt_geometry=wkt_geometry,fid=fid)
     for variable, parameter in pipe_signature.items():
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
@@ -31,14 +31,14 @@ def pipe_from_feature(feature: QgsFeature):
             else:
                 value = qgis_feature
             setattr(pipe, variable, value)
-    
+
     return pipe
 
 def outlet_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
     outlet_signature = inspect.signature(Outlet).parameters
     outlet = Outlet(wkt_geometry=wkt_geometry)
-    
+
     for variable, parameter in outlet_signature.items():
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
@@ -47,15 +47,15 @@ def outlet_from_feature(feature: QgsFeature):
             else:
                 value = qgis_feature
             setattr(outlet, variable, value)
-    
+
     return outlet
 
 def weir_from_feature(feature: QgsFeature):
-    
+
     wkt_geometry = feature.geometry().asWkt()
     weir_signature = inspect.signature(Weir).parameters
     weir = Weir(wkt_geometry=wkt_geometry)
-    
+
     for variable, parameter in weir_signature.items():
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
@@ -64,14 +64,14 @@ def weir_from_feature(feature: QgsFeature):
             else:
                 value = qgis_feature
             setattr(weir, variable, value)
-    
+
     return weir
 
 def pumping_station_from_feature(feature: QgsFeature):
     wkt_geometry = feature.geometry().asWkt()
     pumping_station_signature = inspect.signature(Pipe).parameters
     pumping_station = PumpingStation(wkt_geometry=wkt_geometry)
-    
+
     for variable, parameter in pumping_station_signature.items():
         if variable != 'wkt_geometry':
             qgis_feature = feature[variable]
@@ -80,7 +80,7 @@ def pumping_station_from_feature(feature: QgsFeature):
             else:
                 value = qgis_feature
             setattr(pumping_station, variable, value)
-    
+
     return pumping_station
 
 '''
@@ -92,7 +92,7 @@ def update_qgs_feature(layer, feature_id, attribute, attribute_value):
     for feature in features:
         updateMap[feature.id()] = { fieldIdx: 'a' }
 
-    provider.changeAttributeValues( updateMap )    
+    provider.changeAttributeValues( updateMap )
 '''
 def get_feature_count(layer):
     count=layer.featureCount()
@@ -110,25 +110,25 @@ def check_sewer_type(pipe_features):
     sewerage_types = {feature['sewerage_type'] for feature in pipe_features}
     if len(sewerage_types) > 1:
         raise ValueError('Multiple sewerage types in layer')
-    sewerage_type = sewerage_types.pop()        
+    sewerage_type = sewerage_types.pop()
     return sewerage_type
 
 
 def validate_network(network):
-    # Check for loops in the network        
-    cycles = nx.simple_cycles(network.network)   
+    # Check for loops in the network
+    cycles = nx.simple_cycles(network.network)
     if sum(1 for _ in cycles) > 0:
-        cycles = nx.simple_cycles(network.network)   
+        cycles = nx.simple_cycles(network.network)
         pipe_fids = []
         for cycle in cycles:
             for i in range(0,len(cycle)-1):
                 edge = (cycle[i], cycle[i+1])
                 pipe = network.get_pipe_with_edge(edge)
                 pipe_fids += [pipe.fid]
-        
+
         print(pipe_fids)
         raise ValueError('Network has a loop, pipe FID: {}'.format(pipe_fids))
-        
+
     # Check if all pipes in the network are connected to a weir
     # If not, this will break the hydraulic gradient calculation
     pipes_without_weir = []
@@ -138,38 +138,38 @@ def validate_network(network):
         if weir is None:
             pipe = network.get_pipe_with_edge(edge)
             pipes_without_weir += [pipe.fid]
-        
+
     if len(pipes_without_weir)> 0:
         raise ValueError('Network contains pipes that do not have an outlet: {}'.format(pipes_without_weir))
-    
+
 
 def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_layer):
     """
-    Assumptions: 
+    Assumptions:
     Pipes in the layer form a single network with one type
     StormWaterNetwork should have atleast one weir and one pipe
     WasteWaterNetwork should have atleast one weir or outlet and one pipe
-    
+
     Funtion:
     count number of features per layer
     check if n features is 0
     check type of sewer system
     check if necessary layers have features (n feature is not 0)
     get pipe network
-    add layers to pipe network if count of features is not 0          
+    add layers to pipe network if count of features is not 0
     """
-    
+
     n_pipes,n_pipes_not_zero=get_feature_count(pipe_layer)
     n_weirs,n_weirs_not_zero=get_feature_count(weir_layer)
     n_pumping_stations,n_pumping_stations_not_zero=get_feature_count(pumping_station_layer)
     n_outlets,n_outlets_not_zero=get_feature_count(outlet_layer)
-    
+
     if n_pipes_not_zero:
         pipe_features=get_features(pipe_layer)
         sewerage_type=check_sewer_type(pipe_features)
     else:
         raise ValueError('Sewerage should have pipe features.')
-        
+
     if sewerage_type in [HEMELWATERRIOOL, INFILTRATIEVOORZIENING, VGS_HEMELWATERRIOOL]:
         if n_weirs_not_zero:
             network = StormWaterPipeNetwork()
@@ -179,10 +179,10 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
         if n_weirs_not_zero or n_outlets_not_zero:
             network = WasteWaterPipeNetwork()
         else:
-            raise ValueError('Sewerage should have weir or outlet features.')      #TODO: is this true?       
+            raise ValueError('Sewerage should have weir or outlet features.')      #TODO: is this true?
     else:
         raise ValueError('Invalid sewerage type')
-    
+
     pipe_features=get_features(pipe_layer)
     for feature in pipe_features:
         pipe = pipe_from_feature(feature)
@@ -202,11 +202,11 @@ def create_sewerage_network(pipe_layer,weir_layer,pumping_station_layer,outlet_l
         for feature in pumping_station_features:
             pumping_station = pumping_station_from_feature(feature)
             network.add_pumping_station(pumping_station)
-    
+
     network.add_id_to_nodes()
     validate_network(network)
-    
-    return network
+
+    return network,loop,loop_pipe_fids
 
 def update_field(layer,feature,field,value):
     feature[field]=value
@@ -215,6 +215,7 @@ def update_field(layer,feature,field,value):
 def core_to_layer(network,layer):
     """writes all changed fields of network python object back to QGIS sewerage layer
     """
+    empty_accumulated_fields=[]
     fields=layer.fields().names()
     with edit(layer):
         for field in fields:
@@ -230,8 +231,11 @@ def core_to_layer(network,layer):
                 for feature in features:
                     feature_fid = feature['fid']
                     pipe = network.pipes[feature_fid]
-                    if pipe.accumulated_connected_surface_area is not None:
+                    val = [None,0]
+                    if pipe.accumulated_connected_surface_area not in val:
                         update_field(layer,feature,field,round(float(pipe.accumulated_connected_surface_area),2))
+                    else:
+                        empty_accumulated_fields.append(feature_fid)
             elif field=='max_hydraulic_gradient':
                 features=get_features(layer)
                 for feature in features:
@@ -288,4 +292,4 @@ def core_to_layer(network,layer):
                     pipe = network.pipes[feature_fid]
                     if pipe.start_level is not None:
                         update_field(layer,feature,field,round(float(pipe.start_level),2))
-
+    return empty_accumulated_fields

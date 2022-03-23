@@ -313,8 +313,12 @@ class Pipe:
         estimated_diameter,velocity = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter
         self.velocity=velocity
-
-
+        
+        if self.velocity > vmax:
+            self.velocity_to_high=True
+        else:
+            self.velocity_to_high=False
+            
     def validate(self):
         if len(self.points) != 2:
             raise InvalidGeometryException
