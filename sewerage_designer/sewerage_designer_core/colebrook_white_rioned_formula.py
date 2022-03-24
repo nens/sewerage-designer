@@ -31,13 +31,12 @@ D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2]
 # constants
 K=0.003             #assumption from Rioned
 G=9.81              #gravitational acceleration [m/s2]
-VI=1.007*10**-6     #kinematic viscosity [m2/s]
+VI=0.000001007     #kinematic viscosity [m2/s]
 
 class ColebrookWhite:
     
     def __init__(self, q, Smax, sewerage_type, v_max):
-        self.q=q                 #discharge [m3/s]
-        self.vmax=v_max #initial max velocity [m/s]
+        self.vmax=v_max         #initial max velocity [m/s]
         self.Smax=Smax          #max hydraulic gradient [-]
 
         # Options for diameters are dependent on the sewerage type
@@ -45,15 +44,13 @@ class ColebrookWhite:
             self.d_options = D_OPTIONS_INFILTRATIE
         else:
             self.d_options = D_OPTIONS
-        
-        
-        # Define initial diameter
-        self.D_precise = self.calculate_diameter()        
-        self.D_design = self.find_closest_diameter(self.D_precise)
-        
-        
-    def calculate_diameter(self):        
-        D=2*math.sqrt(self.vmax/(math.pi*self.q))
+                
+        # Define initial velocity and initial diameter
+        self.D_design = self.d_options[0]
+        self.v  = self.colebrook_white()
+                                
+    def calculate_diameter(self):
+        D=2*math.sqrt((math.pi*self.q)/self.vmax)
         return D
 
     def find_closest_diameter(self, diameter):
@@ -70,56 +67,33 @@ class ColebrookWhite:
             return before    
             
     def calc_vmax(self):
-        vmax=self.q/(math.pi*(self.D_design/2)**2)
+        vmax=(math.pi*self.q)/(self.D_design/2)**2
         return vmax
-    
+
     def increase_diameter(self):
         self.D_design = self.d_options[bisect_right(self.d_options, self.D_design)]
         
     def colebrook_white(self):
-        #vcalc=(-2*np.sqrt(2*g*D*Smax))*np.log((k/(3.7*D))+((2.5*vi)/(D*np.sqrt(2*g*D*Smax))))
-        #isolation of S found at https://civilweb-spreadsheets.com/drainage-design-spreadsheets/pipe-flow-calculator/colebrook-white-equation/    
-        Scalc=self.vmax**2/(8*G*self.D_design*(math.log10((K/(3.7*self.D_design))+((6.28*VI)/(self.vmax*self.D_design))**0.89))**2)  
-        return Scalc
+        v = -2*math.sqrt(2*G*self.D_design*self.Smax) * math.log10((K/(3.7*self.D_design)) + ((2.5*VI)/(self.D_design*math.sqrt(2*G*self.D_design*self.Smax))))
+        return v
     
     def iterate_diameters(self):
-        print('intial velocity='f"{self.vmax}")
-        print('q='f"{self.q}")
-        print('first guess D='f"{self.D_precise}")
-        print('D_design='f"{self.D_design}")
-        self.vmax = self.calc_vmax() #compute vmax corresponding to D_design before computing Scalc
-        print('calc_vmax='f"{self.vmax}")
-        Scalc = self.colebrook_white()
-        print('Scalc='f"{Scalc}")
         
-        while Scalc > self.Smax and self.D_design != self.d_options[-1]:
-            print('Scalc='f"{Scalc}")
-            print('Smax='f"{self.Smax}")
+        while self.v > self.vmax and self.D_design != self.d_options[-1]:
             self.increase_diameter()
-            print('increase_diameter:D_design='f"{self.D_design}")
-            self.vmax = self.calc_vmax()
-            print('calc_vmax='f"{self.vmax}")
-            Scalc = self.colebrook_white()
-            print('colebrook_white_Scalc='f"{Scalc}")
+            self.v = self.colebrook_white()
+            
+        return self.D_design,self.v
+        
+# smax = 0.003333333
 
-        return self.D_design,self.vmax
+# vmax= 1.5
 
-smax = 0.003333333
-vmax= 1.5
-q = 109.14
+# colebrook = ColebrookWhite(Smax=smax, sewerage_type='infiltratievoorziening', v_max=v_max)
+# colebrook.D_design = 0.4
 
-colebrook = ColebrookWhite(q=q, Smax=smax, sewerage_type='infiltratievoorziening', v_max=v_max)
+# colebrook.colebrook_white()
 
-colebrook.calc_vmax()
+# colebrook.iterate_diameters()
 
-colebrook.vmax = 0.8685
-colebrook.D_design = 0.4
-colebrook.q = 0.10914
-colebrook.calculate_diameter()
-
-colebrook.iterate_diameters()
-
-
-colebrook.D_design
-    
         
