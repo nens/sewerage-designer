@@ -52,8 +52,8 @@ class ColebrookWhite:
         self.D_design = self.find_closest_diameter(self.D_precise)
         
         
-    def calculate_diameter(self):
-        D=2*math.sqrt((math.pi*self.q)/self.vmax)
+    def calculate_diameter(self):        
+        D=2*math.sqrt(self.vmax/(math.pi*self.q))
         return D
 
     def find_closest_diameter(self, diameter):
@@ -70,7 +70,7 @@ class ColebrookWhite:
             return before    
             
     def calc_vmax(self):
-        vmax=(math.pi*self.q)/(self.D_design/2)**2
+        vmax=self.q/(math.pi*(self.D_design/2)**2)
         return vmax
     
     def increase_diameter(self):
@@ -103,5 +103,23 @@ class ColebrookWhite:
             print('colebrook_white_Scalc='f"{Scalc}")
 
         return self.D_design,self.vmax
-        
+
+smax = 0.003333333
+vmax= 1.5
+q = 109.14
+
+colebrook = ColebrookWhite(q=q, Smax=smax, sewerage_type='infiltratievoorziening', v_max=v_max)
+
+colebrook.calc_vmax()
+
+colebrook.vmax = 0.8685
+colebrook.D_design = 0.4
+colebrook.q = 0.10914
+colebrook.calculate_diameter()
+
+colebrook.iterate_diameters()
+
+
+colebrook.D_design
+    
         

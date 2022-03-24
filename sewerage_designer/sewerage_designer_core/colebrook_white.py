@@ -31,7 +31,7 @@ D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2]
 # constants
 K=0.003             #assumption from Rioned
 G=9.81              #gravitational acceleration [m/s2]
-VI=1.007*10**-6     #kinematic viscosity [m2/s]
+VI=0.000001007     #kinematic viscosity [m2/s]
 
 class ColebrookWhite:
     
@@ -49,11 +49,32 @@ class ColebrookWhite:
         self.D_design = self.d_options[0]
         self.v  = self.colebrook_white()
                                 
+    def calculate_diameter(self):
+        D=2*math.sqrt((math.pi*self.q)/self.vmax)
+        return D
+
+    def find_closest_diameter(self, diameter):
+        pos = bisect_left(self.d_options, diameter)
+        if pos == 0:
+            return self.d_options[0]
+        if pos == len(self.d_options):
+            return self.d_options[-1]
+        before = self.d_options[pos - 1]
+        after = self.d_options[pos]
+        if after - diameter < diameter - before:
+            return after
+        else:
+            return before    
+            
+    def calc_vmax(self):
+        vmax=(math.pi*self.q)/(self.D_design/2)**2
+        return vmax
+
     def increase_diameter(self):
         self.D_design = self.d_options[bisect_right(self.d_options, self.D_design)]
         
     def colebrook_white(self):
-        v = -2*math.sqrt(2*G*self.Smax) * math.log10((K/(3.7*self.D_design)) + ((2.5*VI)/(self.D_design*math.sqrt(2.5*G*self.D_design*self.Smax))))
+        v = -2*math.sqrt(2*G*self.D_design*self.Smax) * math.log10((K/(3.7*self.D_design)) + ((2.5*VI)/(self.D_design*math.sqrt(2*G*self.D_design*self.Smax))))
         return v
     
     def iterate_diameters(self):
@@ -64,11 +85,12 @@ class ColebrookWhite:
             
         return self.D_design,self.v
         
-# smax = 0.0033333
+# smax = 0.003333333
+
 # vmax= 1.5
 
-# colebrook = ColebrookWhite(q=q, Smax=smax, sewerage_type='infiltratievoorziening', v_max=v_max)
-# colebrook.D_design = 0.8
+# colebrook = ColebrookWhite(Smax=smax, sewerage_type='infiltratievoorziening', v_max=v_max)
+# colebrook.D_design = 0.4
 
 # colebrook.colebrook_white()
 
