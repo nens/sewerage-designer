@@ -26,7 +26,7 @@ from .constants import *
 
 #user-defined variables:
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
-D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2]
+D_OPTIONS_INFILTRATIE = [0.4,0.6,0.8,1.2,1.4,1.6,1.8]
 
 # constants
 K=0.003             #assumption from Rioned
