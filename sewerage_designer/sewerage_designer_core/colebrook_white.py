@@ -62,12 +62,13 @@ class ColebrookWhite:
             return self.d_options[0]
         if pos == len(self.d_options):
             return self.d_options[-1]
-        before = self.d_options[pos - 1]
+        #before = self.d_options[pos - 1]
         after = self.d_options[pos]
-        if after - diameter < diameter - before:
-            return after
-        else:
-            return before    
+        #if after - diameter < diameter - before:
+        #    return after
+        #else:
+        #    return before 
+        return after
             
     def calc_vmax(self):
         vmax=self.q/(math.pi*(self.D_design/2)**2)

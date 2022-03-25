@@ -29,7 +29,7 @@ from qgis import processing
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal,QVariant
-from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel,QgsField,QgsLineSymbol
+from qgis.core import QgsProject,QgsVectorLayer,QgsRasterLayer,QgsMapLayerProxyModel,QgsField,QgsLineSymbol,QgsProperty
 from qgis.core.additions.edit import edit
 
 from qgis_connector import *
@@ -135,6 +135,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
     def copy(self,source,dest):
     	with open(source,'rb') as src, open(dest,'wb') as dst: dst.write(src.read())
 
+    def traceback_message(self,trace):
+        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#d6d6d6>'f"{trace}"'</FONT>')
+
     def info_message(self,message):
         QtWidgets.QMessageBox.about(self,"Info",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')
         
@@ -142,7 +145,15 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         QtWidgets.QMessageBox.about(self,"Computation finished",'<FONT COLOR=''#ffffff>'f"{message}"'</FONT>')
         
     def something_went_wrong_message(self,message):
-        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#d6d6d6>'f"{message}"'</FONT>')        
+        QtWidgets.QMessageBox.about(self,"Something went wrong",'<FONT COLOR=''#d6d6d6>'f"{message}"'</FONT>')
+
+    def something_went_wrong_message_with_traceback(self,message):       
+        box=QtWidgets.QMessageBox()
+        styled_message='<FONT COLOR=''#d6d6d6>'f"{message}"'</FONT>'
+        response=box.question(self,'Something went wrong',styled_message,
+                                  QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Help,
+                                  QtWidgets.QMessageBox.Ok)
+        return response
 
     def get_sewerage_designer_layers(self):
         #get and check if all required SewerageDesigner layers exist in QGIS project
@@ -175,7 +186,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         check_intensity=self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
         if not intensity==check_intensity:
             box=QtWidgets.QMessageBox()
-            message='Peak intensity 'f"{intensity}"' mm/5min does not match the peak intensity of the design event. Want to continue?'
+            message='Peak intensity 'f"{intensity}"' mm/hour does not match the peak intensity of the design event. Want to continue?'
             styled_message='<FONT COLOR=''#ffffff>'f"{message}"'</FONT>'
             response=box.question(self,'Warning',styled_message,
                                   QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
@@ -183,7 +194,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
 
         return response
     
-    def mistakes_in_network_error(self,pipe_fids, layer_name, message):
+    def mistakes_in_network_error(self,pipe_fids, layer_name, fields_of_interest, message):
         """
         Reports mistakes in design in message and adds a layer that highlights the faulty pipes
         """
@@ -192,12 +203,16 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         clone=self.make_clone(sewerage_layer,pipe_fids,layer_name)
         with edit(clone):            
             field_ids=[]
-            fieldnames=set(['fid'])
+            fieldnames=set(fields_of_interest)
             for field in clone.fields():
                 if field.name() not in fieldnames:
                   field_ids.append(clone.fields().indexFromName(field.name()))
-            
-        symbol=QgsLineSymbol.createSimple({'color':'red','capstyle':'round'})
+        
+        if 'diameter' in fields_of_interest:    
+            symbol=QgsLineSymbol.createSimple({'color':'red','capstyle':'round','line_width_unit':'Pixel'})
+            symbol.setDataDefinedWidth(QgsProperty.fromExpression('"diameter"*9.2'))
+        else:
+            symbol=QgsLineSymbol.createSimple({'color':'red','line_width':'6','line_width_unit':'Pixel','capstyle':'round'})
         clone.renderer().setSymbol(symbol)
         clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
         clone.triggerRepaint()
@@ -220,12 +235,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
                 if len(pipes_in_loop) > 0:
                     message=f"Network has a loop, pipe FIDs: {pipes_in_loop}"
                     layer_name = 'Pipes that are in a loop'
-                    self.mistakes_in_network_error(pipes_in_loop, layer_name, message)
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_in_loop, layer_name, fields_of_interest, message)
                 
                 if len(pipes_without_weir) > 0:
                     message=f"Network has pipes that are not connected to a weir, pipe FIDs: {pipes_without_weir}"
-                    layer_name = 'Pipes without a weir'                
-                    self.mistakes_in_network_error(pipes_without_weir, layer_name, message)
+                    layer_name = 'Pipes without a weir'
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_without_weir, layer_name, fields_of_interest, message)
                     
                 return
 
@@ -248,10 +265,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             else: #we have some zeros accumulated connected surfaces
                 message=f"Some pipes have no accumulated connected surfaces, pipe FIDs: {pipes_with_empty_accumulated_fields}"
                 layer_name = 'Pipes without accumulated connected surface'
-                self.mistakes_in_network_error(pipes_with_empty_accumulated_fields, layer_name, message)
+                fields_of_interest = ['fid','connected_surface_area','accumulated_connected_surface_area']
+                self.mistakes_in_network_error(pipes_with_empty_accumulated_fields, layer_name, fields_of_interest, message)
         except Exception as ex:
-            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
-            self.something_went_wrong_message(message)
+            trace='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            message=ex
+            response=self.something_went_wrong_message_with_traceback(message)
+            if response==QtWidgets.QMessageBox.Help:
+                self.traceback_message(trace)
 
     def read_attribute_values(self,layer,field):
         "return alls attribute values of a certain field of certain layer"
@@ -269,12 +290,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
                 if len(pipes_in_loop) > 0:
                     message=f"Network has a loop, pipe FIDs: {pipes_in_loop}"
                     layer_name = 'Pipes that are in a loop'
-                    self.mistakes_in_network_error(pipes_in_loop, layer_name, message)
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_in_loop, layer_name, fields_of_interest, message)
                 
                 if len(pipes_without_weir) > 0:
                     message=f"Network has pipes that are not connected to a weir, pipe FIDs: {pipes_without_weir}"
-                    layer_name = 'Pipes without a weir'                
-                    self.mistakes_in_network_error(pipes_without_weir, layer_name, message)
+                    layer_name = 'Pipes without a weir'   
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_without_weir, layer_name, fields_of_interest, message)
                     
                 return
 
@@ -283,16 +306,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             global_settings_layer=self.get_map_layer('global_settings')
             minimum_freeboard=self.read_attribute_values(global_settings_layer,'minimum_freeboard')[0]
             self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
-            #self.sewerage_network.evaluate_hydraulic_gradient_upstream(waking=minimum_freeboard)
             vmax=self.read_attribute_values(global_settings_layer,'maximum_velocity')[0]
             peak_intensity = self.get_final_peak_intensity_from_lineedit()
             
             velocity_to_high_pipe_fids=[]
-            d=[]
             for pipe_id, pipe in self.sewerage_network.pipes.items():
                 pipe.calculate_discharge(intensity=peak_intensity)
                 pipe.calculate_diameter(vmax)
-                d.append(pipe.diameter)
                 pipe.set_material()
                 if pipe.velocity_to_high:
                     velocity_to_high_pipe_fids.append(pipe_id)
@@ -305,10 +325,15 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             else:
                 message=f"The velocity in some pipes is too large, pipe FIDs: {velocity_to_high_pipe_fids}"
                 layer_name = 'Pipes with excessive velocity'
-                self.mistakes_in_network_error(velocity_to_high_pipe_fids, layer_name, message)                
+                fields_of_interest = ['fid','diameter','discharge','velocity','max_hydraulic_gradient']
+                self.mistakes_in_network_error(velocity_to_high_pipe_fids, layer_name, fields_of_interest, message) 
+                
         except Exception as ex:
-            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
-            self.something_went_wrong_message(message)
+            trace='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            message=ex
+            response=self.something_went_wrong_message_with_traceback(message)
+            if response==QtWidgets.QMessageBox.Help:
+                self.traceback_message(trace)
 
     def make_clone(self,layer,features_to_be_cloned,name):
         layer.select(features_to_be_cloned)
@@ -326,12 +351,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
                 if len(pipes_in_loop) > 0:
                     message=f"Network has a loop, pipe FIDs: {pipes_in_loop}"
                     layer_name = 'Pipes that are in a loop'
-                    self.mistakes_in_network_error(pipes_in_loop, layer_name, message)
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_in_loop, layer_name, fields_of_interest, message)
                 
                 if len(pipes_without_weir) > 0:
                     message=f"Network has pipes that are not connected to a weir, pipe FIDs: {pipes_without_weir}"
-                    layer_name = 'Pipes without a weir'                
-                    self.mistakes_in_network_error(pipes_without_weir, layer_name, message)
+                    layer_name = 'Pipes without a weir'   
+                    fields_of_interest = ['fid']
+                    self.mistakes_in_network_error(pipes_without_weir, layer_name, fields_of_interest, message)
                     
                 return
 
@@ -339,10 +366,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
             minimum_cover_depth=self.read_attribute_values(global_settings_layer,'minimum_cover_depth')[0]
             DEM=self.get_DEM()
             self.sewerage_network.add_elevation_to_network(DEM) #re-do this because user can change the DEM after compute diameters
-            validated=[];d=[]
+            validated=[]
             self.sewerage_network.calculate_cover_depth()
             for pipe in self.sewerage_network.pipes.values():
-                d.append(pipe.diameter)
                 if pipe.cover_depth>minimum_cover_depth:
                     validated.append(True)
                 else:
@@ -353,15 +379,17 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
                 message='Valid design! The cover depth of all pipes meet the minimum depth requirement.'
                 self.finished_computation_message(message)
             else:
-                max_d=max(d)
-                self.create_layer_of_faulty_cover_depths(minimum_cover_depth,max_d)
+                self.create_layer_of_faulty_cover_depths(minimum_cover_depth)
                 message='Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red.'
                 self.finished_computation_message(message)
         except Exception as ex:
-            message='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
-            self.something_went_wrong_message(message)
+            trace='\n'.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))
+            message=ex
+            response=self.something_went_wrong_message_with_traceback(message)
+            if response==QtWidgets.QMessageBox.Help:
+                self.traceback_message(trace)
 
-    def create_layer_of_faulty_cover_depths(self,minimum_cover_depth,max_d):
+    def create_layer_of_faulty_cover_depths(self,minimum_cover_depth):
         layer=self.get_map_layer('sewerage')
         layer.selectAll()
         clone=processing.run("native:saveselectedfeatures",{'INPUT':layer,'OUTPUT':'memory:'})['OUTPUT']
@@ -373,7 +401,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         
         with edit(clone):            
             field_ids=[]
-            fieldnames=set(['fid','cover_depth','minimum_cover_depth','validated?'])
+            fieldnames=set(['fid','diameter','cover_depth','minimum_cover_depth','validated?'])
             for field in clone.fields():
                 if field.name() not in fieldnames:
                   field_ids.append(clone.fields().indexFromName(field.name()))
@@ -396,7 +424,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         clone.dataProvider().deleteAttributes(field_ids)
         clone.updateFields()
         
-        symbol=QgsLineSymbol.createSimple({'color':'red','line_width':str(max_d*9.2),'line_width_unit':'Pixel','capstyle':'round'})
+        symbol=QgsLineSymbol.createSimple({'color':'red','capstyle':'round','line_width_unit':'Pixel'})
+        symbol.setDataDefinedWidth(QgsProperty.fromExpression('"diameter"*9.2'))
         clone.renderer().setSymbol(symbol)
         clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
         clone.triggerRepaint()
@@ -405,9 +434,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget,FORM_CLASS):
         clone.selectAll()
         iface.actionZoomToSelected().trigger() 
         clone.removeSelection()
-
         
-    		   	
     def filepath_create_or_load_geopackage_isChanged(self):
         gpkg=self.get_geopackage_create_or_load_path()
         if gpkg=='.gpkg':

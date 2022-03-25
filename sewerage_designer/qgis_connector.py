@@ -17,8 +17,12 @@ class SewerageDesignerQgsConnector:
 def pipe_from_feature(feature: QgsFeature):
     fid = feature.id()
     geom = feature.geometry()
+    wkb_type=geom.wkbType()
+    types_in_text=dict([(v, k) for k, v in QgsWkbTypes.__dict__.items() if isinstance(v, int)])
+    wkb_type_text=types_in_text.get(wkb_type)
+
     if (not geom.type() == QgsWkbTypes.LineGeometry) or geom.isMultipart():
-        raise ValueError(f"Invalid geometry type: {geom.type()} for pipe with id {fid}")
+        raise ValueError(f"Invalid geometry type: {wkb_type_text} for pipe with id {fid}. Pipes should be singlepart line geometries.")
 
     wkt_geometry = feature.geometry().asWkt()
     pipe_signature = inspect.signature(Pipe).parameters
