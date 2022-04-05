@@ -22,7 +22,7 @@
  ***************************************************************************/
 """
 
-import gdal
+from osgeo import gdal
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt
 from qgis.PyQt.QtGui import QIcon
