@@ -473,37 +473,6 @@ class PipeNetwork:
             max_hydraulic_gradient = min(hydraulic_gradients[pipe_fid])
             setattr(self.pipes[pipe_fid], "max_hydraulic_gradient", max_hydraulic_gradient)
 
-    def evaluate_hydraulic_gradient_upstream(self, waking):
-        """Evaluate the maximum hydraulic gradient for each pipe in the network based on it's elevation"""
-
-        for edge in self.network.edges:
-            pipe = self.get_pipe_with_edge(edge)
-            start_node = edge[0]
-            distance_to_weir, closest_weir = self.find_closest_weir(start_node)
-            print('start_node='f"{start_node}")
-            print('distance_to_weir='f"{distance_to_weir}")
-            hydraulic_head = (
-                (closest_weir.weir_level + closest_weir.crest_flow_depth)
-                + pipe.max_hydraulic_gradient * distance_to_weir
-            )
-            print('hydraulic_head='f"{hydraulic_head}")
-            print('pipe.lowest_elevation='f"{pipe.lowest_elevation}")
-            head_difference = (pipe.lowest_elevation - waking) - hydraulic_head
-            print('head_difference='f"{head_difference}")
-            if head_difference < 0:
-                new_hydraulic_gradient = pipe.max_hydraulic_gradient - (
-                    head_difference / distance_to_weir
-                )
-                print('new_hydraulic_gradient='f"{new_hydraulic_gradient}")
-                if new_hydraulic_gradient < self.max_hydraulic_gradient:
-                    self.max_hydraulic_gradient = new_hydraulic_gradient
-                    print('smaller,so:self.max_hydraulic_gradient='f"{self.max_hydraulic_gradient}")
-
-        for pipe in self.pipes:
-            setattr(
-                self.pipes[pipe], "max_hydraulic_gradient", self.max_hydraulic_gradient
-            )
-
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
 
