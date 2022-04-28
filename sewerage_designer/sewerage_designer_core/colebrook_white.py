@@ -3,9 +3,7 @@
 Created on Tue Nov 30 11:07:10 2021
 
 @author: stijn.overmeen
-"""
 
-'''
 Discharge q is known
 Velocity v is a maximum limit
 Diameter D is computed as: D=2*sqrt((pi*Q)/V)
@@ -18,11 +16,13 @@ We use Colebrook-White equation for this, with the following variable settings:
 If S_calc (colebrook_white) > S_max with max v, redefine D and calculate again.
 
 Possible diameters are: 250,315,400,500,600,700,etc..
-'''
-
-from bisect import bisect_left, bisect_right
+"""
+# First-party imports 
 import math
-from .constants import *
+from bisect import bisect_left, bisect_right
+
+# Local imports
+from . import constants as c
 
 #user-defined variables:
 D_OPTIONS=[0.25,0.315,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0] #diameter [m]
@@ -41,7 +41,7 @@ class ColebrookWhite:
         self.Smax=Smax          #max hydraulic gradient [-]
 
         # Options for diameters are dependent on the sewerage type
-        if sewerage_type == INFILTRATIEVOORZIENING:
+        if sewerage_type == c.INFILTRATIEVOORZIENING:
             self.d_options = D_OPTIONS_INFILTRATIE
         else:
             self.d_options = D_OPTIONS
@@ -92,7 +92,7 @@ class ColebrookWhite:
         print('calc_vmax='f"{self.vmax}")
         Scalc = self.colebrook_white()
         print('Scalc='f"{Scalc}")
-        
+        print(self.D_design, self.d_options[-1])
         while Scalc > self.Smax and self.D_design != self.d_options[-1]:
             print('Scalc='f"{Scalc}")
             print('Smax='f"{self.Smax}")

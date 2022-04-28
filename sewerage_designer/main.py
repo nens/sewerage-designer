@@ -1,4 +1,6 @@
 
+import sys
+sys.path.append(r"C:\Users\chris.kerklaan\Documents\Github\sewerage-designer\sewerage_designer")
 import os
 
 from osgeo import gdal, ogr
@@ -9,16 +11,21 @@ from sewerage_designer_core.constants import *
 from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
 
 if __name__ == '__main__':
-    
-    pipe_ds = ogr.Open(r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\sewerage_designer_ontwerp_bas_v0_SINGLEPART.gpkg')
+    pipe_ds = ogr.Open(r'C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/sewerage_design_internal_weirs_try.gpkg', 1)
     pipe_layer = pipe_ds.GetLayer('sewerage')
+    weir_layer =  pipe_ds.GetLayer('weir')
 
     # Settings
     network_type = 'infiltratieriool'
     design_rain = 'Bui10'
     waking = 0
-    dem = './tests/test_data/Zundert.tif'
-    bgt_inlooptabel_file = r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\bgt_inlooptabel_zundert.gpkg'
+    
+    freeboard = 0.2
+    vmax=1.5
+    peak_intensity = 75.6
+
+    dem = r'C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\rijsbergen/rijsbergen.tif'
+    bgt_inlooptabel_file = r'C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\rijsbergenbgt_inlooptabel_zundert.gpkg'
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
@@ -38,7 +45,58 @@ if __name__ == '__main__':
         pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
         stormwater_network.add_pipe(pipe)
         
+    
+    
+    # Add some weirs
+    # Add some pipes
+    for i,feature in enumerate(weir_layer):
+        props = json.loads(feature.ExportToJson())['properties']
+        geom = feature.GetGeometryRef()
+        wkt = geom.ExportToWkt()
+        weir = Weir(wkt_geometry=wkt, 
+                    fid=feature.GetFID(),
+                    crest_flow_depth=props['crest_flow_depth'],
+                    weir_level=props['weir_level']
+                    )
+        stormwater_network.add_weir(weir)
+    
+        
     stormwater_network.add_id_to_nodes()
+    stormwater_network.add_elevation_to_network(dem)
+    stormwater_network.accumulate_connected_surface_area()
+    stormwater_network.calculate_max_hydraulic_gradient_interally(freeboard)
+    
+    
+    
+    velocity_to_high_pipe_fids=[]
+    for pipe_id, pipe in stormwater_network.pipes.items():
+        pipe.calculate_discharge(intensity=peak_intensity)
+        pipe.calculate_diameter(vmax)
+        pipe.set_material()
+        if pipe.velocity_to_high:
+            velocity_to_high_pipe_fids.append(pipe_id)
+            
+    # Reset the diameters.
+    for pipe_id, pipe in stormwater_network.pipes.items():
+        
+        feature = pipe_layer.GetFeature(pipe_id)
+        feature.SetField('diameter', pipe.diameter) 
+        pipe_layer.SetFeature(feature)
+        
+    driver = ogr.GetDriverByName("GPKG")
+
+    # create output file
+    out_ds = driver.CreateDataSource(r'C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/sewerage_design_internal_weirs_1.gpkg')
+    
+    for layer in pipe_ds:
+        out_ds.CopyLayer(layer, layer.GetName())
+        
+    out_ds = None
+    
+
+        
+    pipe_layer = None
+    pipe_ds = None
     
     pipe_fids = []
     cycles = nx.simple_cycles(stormwater_network.network)

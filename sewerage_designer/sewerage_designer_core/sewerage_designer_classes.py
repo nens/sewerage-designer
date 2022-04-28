@@ -5,27 +5,126 @@ Created on Wed Dec  8 14:49:31 2021
 @author: Emile.deBadts
 """
 # TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
-import os
 
-from osgeo import gdal, ogr
-import networkx as nx
+# First-party imports
+import os
 import json
 import numpy as np
 
-from .constants import *
+# Third-party imports
+from osgeo import gdal, ogr
+import networkx as nx
+
+# Local imports
+from . import constants as c
 from .colebrook_white import ColebrookWhite
 from .utils import get_intermediates
-
 
 # Timestep of design rain is 5 minutes
 # Timestep of design rain is 5 minutes
 AREA_WIDE_RAIN = {
-    "Bui01": [0.3, 0.6, 0.9, 1.2, 1.5, 1.5, 1.05, 0.9, 0.75, 0.6, 0.45, 0.3, 0.15, 0.15, 0.15],
-    "Bui02": [0.15, 0.15, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.5, 1.5, 1.2, 0.9, 0.6, 0.3],
-    "Bui03": [0.30, 0.60, 0.90, 1.50, 2.10, 2.10, 1.50, 1.20, 1.05, 0.90, 0.75, 0.60, 0.45, 0.30, 0.15],
-    "Bui04": [0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20, 1.50, 2.10, 2.10, 1.50, 0.90, 0.60, 0.30],
-    "Bui05": [0.30, 0.60, 1.50, 2.70, 2.70, 2.10, 1.50, 1.20, 1.05, 0.90, 0.75, 0.60, 0.45, 0.30, 0.15],
-    "Bui06": [0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20, 1.50, 2.10, 2.70, 2.70, 1.50, 0.60, 0.30],
+    "Bui01": [
+        0.3,
+        0.6,
+        0.9,
+        1.2,
+        1.5,
+        1.5,
+        1.05,
+        0.9,
+        0.75,
+        0.6,
+        0.45,
+        0.3,
+        0.15,
+        0.15,
+        0.15,
+    ],
+    "Bui02": [
+        0.15,
+        0.15,
+        0.15,
+        0.3,
+        0.45,
+        0.6,
+        0.75,
+        0.9,
+        1.05,
+        1.5,
+        1.5,
+        1.2,
+        0.9,
+        0.6,
+        0.3,
+    ],
+    "Bui03": [
+        0.30,
+        0.60,
+        0.90,
+        1.50,
+        2.10,
+        2.10,
+        1.50,
+        1.20,
+        1.05,
+        0.90,
+        0.75,
+        0.60,
+        0.45,
+        0.30,
+        0.15,
+    ],
+    "Bui04": [
+        0.15,
+        0.30,
+        0.45,
+        0.60,
+        0.75,
+        0.90,
+        1.05,
+        1.20,
+        1.50,
+        2.10,
+        2.10,
+        1.50,
+        0.90,
+        0.60,
+        0.30,
+    ],
+    "Bui05": [
+        0.30,
+        0.60,
+        1.50,
+        2.70,
+        2.70,
+        2.10,
+        1.50,
+        1.20,
+        1.05,
+        0.90,
+        0.75,
+        0.60,
+        0.45,
+        0.30,
+        0.15,
+    ],
+    "Bui06": [
+        0.15,
+        0.30,
+        0.45,
+        0.60,
+        0.75,
+        0.90,
+        1.05,
+        1.20,
+        1.50,
+        2.10,
+        2.70,
+        2.70,
+        1.50,
+        0.60,
+        0.30,
+    ],
     "Bui07": [0.6, 1.2, 2.1, 3.3, 3.3, 2.7, 2.1, 1.5, 1.2, 0.9, 0.6, 0.3],
     "Bui08": [0.3, 0.6, 0.9, 1.2, 1.5, 2.1, 2.7, 3.3, 3.3, 2.1, 1.2, 0.6],
     "Bui09": [1.5, 2.7, 4.8, 4.8, 4.2, 3.3, 2.7, 2.1, 1.5, 0.9, 0.6, 0.3],
@@ -155,6 +254,11 @@ class Weir:
     def coordinate(self):
         return self.geometry.GetPoints()[0]
 
+    @property
+    def node(self):
+        if hasattr(self, "_node_coordinate"):
+            return self._node_coordinate
+
 
 class Outlet:
     def __init__(
@@ -204,13 +308,13 @@ class Pipe:
         material: str = None,
         connected_surface_area: float = 0.0,
         accumulated_connected_surface_area: float = None,
-        max_hydraulic_gradient : float = None,
+        max_hydraulic_gradient: float = None,
         sewerage_type: str = None,
         cover_depth: float = None,
         discharge: float = None,
         velocity: float = None,
     ):
-        self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry) 
+        self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.fid = fid
         self.diameter = diameter
         self.start_level = start_level
@@ -304,21 +408,24 @@ class Pipe:
         )
         self.discharge = pipe_discharge
 
-    def calculate_diameter(self,vmax):
+    def calculate_diameter(self, vmax):
         """Use the Colebrook White method to esimate the diameters"""
         colebrook_white = ColebrookWhite(
-            q=self.discharge, Smax=self.max_hydraulic_gradient, sewerage_type=self.sewerage_type, v_max=vmax
+            q=self.discharge,
+            Smax=self.max_hydraulic_gradient,
+            sewerage_type=self.sewerage_type,
+            v_max=vmax,
         )
 
-        estimated_diameter,velocity = colebrook_white.iterate_diameters()
+        estimated_diameter, velocity = colebrook_white.iterate_diameters()
         self.diameter = estimated_diameter
-        self.velocity=velocity
-        
+        self.velocity = velocity
+
         if self.velocity > vmax:
-            self.velocity_to_high=True
+            self.velocity_to_high = True
         else:
-            self.velocity_to_high=False
-            
+            self.velocity_to_high = False
+
     def validate(self):
         if len(self.points) != 2:
             raise InvalidGeometryException
@@ -336,6 +443,9 @@ class Pipe:
             output += "\n"
 
         return output
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class PipeNetwork:
@@ -367,12 +477,19 @@ class PipeNetwork:
         if self.weir is not None:
             return self.weir.crest_flow_depth + self.weir.weir_level
 
+    def calculate_gradient(self, height1, height2, distance):
+        """ calculates a simple gradient"""
+        return (height2 - height1) / distance
+
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
         self.pipes[pipe.fid] = pipe
-        pipe_edge_start = (round(pipe.start_coordinate[0]),round(pipe.start_coordinate[1]))
-        pipe_edge_end = (round(pipe.end_coordinate[0]),round(pipe.end_coordinate[1]))
-        
+        pipe_edge_start = (
+            round(pipe.start_coordinate[0]),
+            round(pipe.start_coordinate[1]),
+        )
+        pipe_edge_end = (round(pipe.end_coordinate[0]), round(pipe.end_coordinate[1]))
+
         if pipe.start_coordinate not in self.network.nodes:
             self.network.add_node(
                 (pipe_edge_start[0], pipe_edge_start[1]),
@@ -398,40 +515,45 @@ class PipeNetwork:
 
     def add_weir(self, weir: Weir):
         """Add a weir to the network, as an object and as an edge to the graph"""
-        self.weirs[weir.fid] = weir
-        
+
         # Add the node to the network, if the node is already present change it's type
-        weir_coordinate = (round(weir.coordinate[0]),round(weir.coordinate[1]))
+        weir_coordinate = (round(weir.coordinate[0]), round(weir.coordinate[1]))
         weir._node_coordinate = weir_coordinate
         if weir_coordinate not in self.network.nodes:
-            self.network.add_node(weir_coordinate, 
-                                  type="weir",
-                                 connected_area=0,
-                                 position=weir.coordinate)
+            self.network.add_node(
+                weir_coordinate, type="weir", connected_area=0, position=weir.coordinate
+            )
         else:
-            attr = {weir_coordinate: {"type": "weir", "connected_area":0}}
+            attr = {weir_coordinate: {"type": "weir", "connected_area": 0}}
             nx.set_node_attributes(self.network, attr)
 
-    def add_elevation_to_network(self, dem_filename : str):
+        if len(self.find_downstream_pipes(weir_coordinate)) == 0:
+            weir.external = True
+        else:
+            weir.external = False
+
+        self.weirs[weir.fid] = weir
+
+    def add_elevation_to_network(self, dem_filename: str):
         """Add elevation to all pipes in the network"""
-        
+
         dem_datasource = gdal.Open(dem_filename)
         dem_rasterband = dem_datasource.GetRasterBand(1)
         dem_geotransform = dem_datasource.GetGeoTransform()
-        
+
         for pipe in self.pipes.values():
-            pipe.sample_elevation_model(dem_rasterband=dem_rasterband, 
-                                        dem_geotransform=dem_geotransform)
-        
-        
-    def calculate_max_hydraulic_gradient(self, waking : float):
+            pipe.sample_elevation_model(
+                dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform
+            )
+
+    def calculate_max_hydraulic_gradient(self, waking: float):
         """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation
         The max hydraulic gradient is defined as the maximum difference in elevation between the endpoint of the network
         and the furthest node divided by the distance between the two
         Assign this back to all the pipes in the network
         """
-        
+
         # Get all weirs (out-degree=0) nodes in the network
         # Calculate the hydraulic gradient to the furthest upstream point
         # Walk the network upstream from each of these nodes
@@ -443,7 +565,6 @@ class PipeNetwork:
         # Get the distance dictionary for the end node
         hydraulic_gradients = {}
         for weir in self.weirs.values():
-            print(weir)
             weir_node = weir._node_coordinate
             distance_dictionary = self.distance_matrix_reversed[weir_node][0]
             furthest_node, distance = list(distance_dictionary.items())[-1]
@@ -454,25 +575,126 @@ class PipeNetwork:
                 (furthest_pipe.start_elevation + waking)
                 - (weir.weir_level + weir.crest_flow_depth)
             ) / distance
-            
-            print(hydraulic_gradient)
-            
+
             # for each upstream pipe, assign hydraulic gradient
             upstream_pipes = self.find_upstream_pipes(weir_node)
-            
+
             for pipe in upstream_pipes:
                 print(pipe.fid)
                 if pipe.fid not in hydraulic_gradients:
                     hydraulic_gradients[pipe.fid] = []
                     hydraulic_gradients[pipe.fid] += [hydraulic_gradient]
                 else:
-                    hydraulic_gradients[pipe.fid] += [hydraulic_gradient]                    
-            
+                    hydraulic_gradients[pipe.fid] += [hydraulic_gradient]
+
         for pipe_fid in self.pipes:
             pipe = self.pipes[pipe_fid]
             max_hydraulic_gradient = min(hydraulic_gradients[pipe_fid])
-            setattr(self.pipes[pipe_fid], "max_hydraulic_gradient", max_hydraulic_gradient)
+            setattr(
+                self.pipes[pipe_fid], "max_hydraulic_gradient", max_hydraulic_gradient
+            )
 
+    def calculate_max_hydraulic_gradient_internally(self, waking: float):
+        """ 
+        Calculates the max hydraulic gradient with internal and external weirs.
+        For each external weir, the max hydraulic gradient is calculated by looking at
+        the difference between the start elevation of the furthest pipe with the level of the external weir.
+        Then, for each internal weir we check if the current gradient is above or below the [weir_level + crest_flow_level].
+        If it is above we do nothing with the hydraulic gradient if it is below we recompute the current hydraulic gradient.
+               
+        Finally we push the hydraulic gradients back onto the pipes.
+        
+        """
+
+        self.hydraulic_gradients = {pipe.fid: [] for pipe in self.pipes.values()}
+        dmr = self.distance_matrix_reversed
+
+        self.hd_data = {pipe.fid: [] for pipe in self.pipes.values()}
+
+        for weir in self.weirs.values():
+            if not weir.external:  # lose the internal weirs.
+                continue
+            # First we derive the furthest edge for computing the first
+            # hydraulic head.
+            weir_node = weir.node
+            distance_dictionary = dmr[weir_node][0]
+            furthest_node, distance = list(distance_dictionary.items())[-1]
+            furthest_edge = list(self.network.edges(furthest_node))[0]
+            furthest_pipe = self.get_pipe_with_edge(furthest_edge)
+
+            # we set variables and the first hydraulic gradient.
+            start_height = weir.weir_level + weir.crest_flow_depth
+            end_height = furthest_pipe.start_elevation + waking
+            hydraulic_gradient = self.calculate_gradient(
+                start_height, end_height, distance
+            )
+
+            upstream_pipes = self.find_upstream_pipes(weir_node)
+            used_weirs = []
+            for pipe in upstream_pipes:
+                weirs = self.find_weir_on_pipe(pipe)
+
+                for internal_weir in weirs:
+                    # Lose external weirs.
+                    # Weirs are usually on connecting points between two
+                    # pipes. So the will enter this loop twice on different
+                    # pipes. We only want it once. Going upstream this will
+                    # only be on the endpoint.
+                    # Therefore it is added to used weirs and skipped
+                    # if present again.
+                    if (
+                        internal_weir.external == True
+                        or internal_weir.fid in used_weirs
+                    ):
+                        continue
+
+                    # weir is internal, so we recalculate the end height.
+                    end_height = (
+                        internal_weir.weir_level + internal_weir.crest_flow_depth
+                    )
+
+                    # calculate the hydraulic head.
+                    weir_distance = dmr[weir_node][0][internal_weir.node]
+                    hydraulic_head = start_height + (hydraulic_gradient * weir_distance)
+
+                    # ignore weir if hydraulic head is above weir level.
+                    if hydraulic_head >= end_height: 
+                        self.hd_data[pipe.fid].append("hh>end")
+                        continue
+
+                    # Now, the weir is internal and the current.
+                    # Hydraulic head is below the crest flow elevation.
+                    # So, we recalculate a new hydraulic gradient
+                    # using the end height.
+                    hydraulic_gradient = self.calculate_gradient(
+                        start_height, end_height, weir_distance
+                    )
+                    used_weirs.append(internal_weir.fid)
+                    self.hd_data[pipe.fid].append(
+                        f"start height {start_height}, end height: {end_height}, distance: {weir_distance}, weir: {internal_weir.fid}, hg:{hydraulic_gradient}, hh: {hydraulic_head}"
+                    )
+
+                    # we resetted the hydraulic gradient and end_height already.
+                    # Resetting start_height and weir node as well...
+                    start_height = end_height
+                    weir_node = internal_weir.node
+
+                # We add it to the pipe mapping.
+                # Doing this outisde of the loop, because we are assuming a
+                # pipe has only 1 internal weir.
+                # This is almost always the case.
+                self.hydraulic_gradients[pipe.fid].append(hydraulic_gradient)
+
+        # Finally, we set the maximum hydraulic gradient as the minimum of all
+        # hydraulic gradients
+        for pipe_fid in self.pipes:
+            pipe = self.pipes[pipe_fid]
+            max_hydraulic_gradient = min(self.hydraulic_gradients[pipe_fid])
+            self.pipes[pipe_fid].max_hydraulic_gradient = max_hydraulic_gradient
+            
+        print("1180", self.hd_data[1180])
+        print("1182", self.hd_data[1182])
+        
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
 
@@ -485,11 +707,15 @@ class PipeNetwork:
         for edge in self.network.edges:
             pipe = self.get_pipe_with_edge(edge)
             end_node = edge[1]
-            attrs = {end_node: {"connected_area": pipe.connected_surface_area + self.network.nodes[end_node]['connected_area']}}
-            nx.set_node_attributes(self.network, attrs)  
-            edge_attrs = {edge:{'connected_surface_area':pipe.connected_surface_area}}
+            attrs = {
+                end_node: {
+                    "connected_area": pipe.connected_surface_area
+                    + self.network.nodes[end_node]["connected_area"]
+                }
+            }
+            nx.set_node_attributes(self.network, attrs)
+            edge_attrs = {edge: {"connected_surface_area": pipe.connected_surface_area}}
             nx.set_edge_attributes(self.network, edge_attrs)
-
 
         # Define recursive function used to accumulate the connected surface area
         def get_node_output(node, completed_nodes):
@@ -531,8 +757,11 @@ class PipeNetwork:
 
             for successor in node_successors:
                 edge = (node, successor)
-                edge_flow = self.network.nodes[node]["connected_area"] + self.network.edges[edge]['connected_surface_area']
-                attrs = {edge:{'accumulated_connected_area':edge_flow}}
+                edge_flow = (
+                    self.network.nodes[node]["connected_area"]
+                    + self.network.edges[edge]["connected_surface_area"]
+                )
+                attrs = {edge: {"accumulated_connected_area": edge_flow}}
                 nx.set_edge_attributes(self.network, attrs)
                 pipe = self.get_pipe_with_edge(edge)
                 pipe.accumulated_connected_surface_area = edge_flow
@@ -570,44 +799,60 @@ class PipeNetwork:
 
         return upstream_pipes
 
-    def find_closest_weir(self,node):
+    def find_closest_weir(self, node):
         """Get the distance to the closest weir from a node in the network"""
-        
+
         distance = np.inf
         closest_weir = None
         for weir in self.weirs.values():
             weir_node = weir._node_coordinate
             try:
-                distance_to_weir=nx.shortest_path_length(G=self.network,source=node,target=weir_node,weight='length')
+                distance_to_weir = nx.shortest_path_length(
+                    G=self.network, source=node, target=weir_node, weight="length"
+                )
                 if distance_to_weir < distance:
                     distance = distance_to_weir
                     closest_weir = weir
             except nx.NetworkXNoPath:
                 continue
-            
+
         return distance, closest_weir
 
+    def find_weir_on_pipe(self, pipe: Pipe):
+        """ returns weirs if found on a pipe
+            Chris, 28-04-2022: This most likely can be done with NetworkX,
+            But due to time constraints we solve it with python.
+        """
+        return [w for w in self.weirs.values() if w.coordinate in pipe.points]
+
     def draw_network(self, node_label_attr, edge_label_attr):
-        
+
         G = self.network.copy()
         for edge in G.edges:
             pipe = self.get_pipe_with_edge(edge)
             attr = getattr(pipe, edge_label_attr)
             if isinstance(attr, float):
-                attr= round(attr,2)
+                attr = round(attr, 2)
             attrs = {edge: {edge_label_attr: attr}}
             nx.set_edge_attributes(G, attrs)
-            
+
         node_labels = nx.get_node_attributes(G, node_label_attr)
-        pos = nx.get_node_attributes(G, "position")        
+        pos = nx.get_node_attributes(G, "position")
         nx.draw(
-            G, pos, edge_color='black', width=1, linewidths=1,
-            node_size=100, node_color='pink', alpha=0.9,
-            labels=node_labels)
+            G,
+            pos,
+            edge_color="black",
+            width=1,
+            linewidths=1,
+            node_size=100,
+            node_color="pink",
+            alpha=0.9,
+            labels=node_labels,
+        )
 
         edge_labels = nx.get_edge_attributes(G, edge_label_attr)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-        
+
     def validate_network_diameters(self):
         # TODO Walk the network and determine that there are no decreases in diameter
         pass
@@ -621,10 +866,10 @@ class StormWaterPipeNetwork(PipeNetwork):
 
     def calculate_cover_depth(self):
         """Determine the depth """
-        
+
         undirected_network = self.network.to_undirected()
         subgraphs = nx.weakly_connected_component_subgraphs(self.network)
-        
+
         for subgraph in subgraphs:
             subgraph_edges = subgraph.edges
             network_pipes = []
@@ -633,27 +878,31 @@ class StormWaterPipeNetwork(PipeNetwork):
                 _, closest_weir = self.find_closest_weir(edge[1])
                 pipe = self.get_pipe_with_edge(edge)
                 network_pipes += [pipe]
-                
+
                 if closest_weir.weir_level < lowest_weir_height:
                     lowest_weir_height = closest_weir.weir_level
 
             max_diameter = max([pipe.diameter for pipe in network_pipes])
-            
-            for pipe in network_pipes:                
-                material_thickness = MATERIAL_THICKNESS[pipe.material]        
-                pipe.start_level=lowest_weir_height - max_diameter
-                pipe.end_level=lowest_weir_height - max_diameter
-                invert_level=max(pipe.start_level,pipe.end_level) 
+
+            for pipe in network_pipes:
+                material_thickness = MATERIAL_THICKNESS[pipe.material]
+                pipe.start_level = lowest_weir_height - max_diameter
+                pipe.end_level = lowest_weir_height - max_diameter
+                invert_level = max(pipe.start_level, pipe.end_level)
                 cover_depth = pipe.lowest_elevation - (
-                    invert_level + pipe.diameter + material_thickness *2
+                    invert_level + pipe.diameter + material_thickness * 2
                 )
-                pipe.cover_depth=cover_depth
-            
+                pipe.cover_depth = cover_depth
+
     def check_invert_levels(self):
         for pipe in self.pipes.values():
             if pipe.invert_level_start > pipe.minimum_cover_depth:
-                raise ValueError('Pipe invert level is too high, invert level: {}, minimum invert level: {}'.format(pipe.invert_level_start, pipe.minimum_cover_depth))
-            
+                raise ValueError(
+                    "Pipe invert level is too high, invert level: {}, minimum invert level: {}".format(
+                        pipe.invert_level_start, pipe.minimum_cover_depth
+                    )
+                )
+
     def estimate_internal_weir_locations(self):
         # TODO  For a given network and elevation model, determine the best locations to install weirs
         # If there are already weirs in the network, raise error
