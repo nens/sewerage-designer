@@ -478,7 +478,7 @@ class PipeNetwork:
             return self.weir.crest_flow_depth + self.weir.weir_level
 
     def calculate_gradient(self, height1, height2, distance):
-        """ calculates a simple gradient"""
+        """calculates a simple gradient"""
         return (height2 - height1) / distance
 
     def add_pipe(self, pipe: Pipe):
@@ -595,15 +595,15 @@ class PipeNetwork:
             )
 
     def calculate_max_hydraulic_gradient_internally(self, waking: float):
-        """ 
+        """
         Calculates the max hydraulic gradient with internal and external weirs.
         For each external weir, the max hydraulic gradient is calculated by looking at
         the difference between the start elevation of the furthest pipe with the level of the external weir.
         Then, for each internal weir we check if the current gradient is above or below the [weir_level + crest_flow_level].
         If it is above we do nothing with the hydraulic gradient if it is below we recompute the current hydraulic gradient.
-               
+
         Finally we push the hydraulic gradients back onto the pipes.
-        
+
         """
 
         self.hydraulic_gradients = {pipe.fid: [] for pipe in self.pipes.values()}
@@ -658,7 +658,7 @@ class PipeNetwork:
                     hydraulic_head = start_height + (hydraulic_gradient * weir_distance)
 
                     # ignore weir if hydraulic head is above weir level.
-                    if hydraulic_head >= end_height: 
+                    if hydraulic_head >= end_height:
                         self.hd_data[pipe.fid].append("hh>end")
                         continue
 
@@ -691,10 +691,10 @@ class PipeNetwork:
             pipe = self.pipes[pipe_fid]
             max_hydraulic_gradient = min(self.hydraulic_gradients[pipe_fid])
             self.pipes[pipe_fid].max_hydraulic_gradient = max_hydraulic_gradient
-            
+
         print("1180", self.hd_data[1180])
         print("1182", self.hd_data[1182])
-        
+
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
 
@@ -819,9 +819,9 @@ class PipeNetwork:
         return distance, closest_weir
 
     def find_weir_on_pipe(self, pipe: Pipe):
-        """ returns weirs if found on a pipe
-            Chris, 28-04-2022: This most likely can be done with NetworkX,
-            But due to time constraints we solve it with python.
+        """returns weirs if found on a pipe
+        Chris, 28-04-2022: This most likely can be done with NetworkX,
+        But due to time constraints we solve it with python.
         """
         return [w for w in self.weirs.values() if w.coordinate in pipe.points]
 
@@ -865,7 +865,7 @@ class StormWaterPipeNetwork(PipeNetwork):
         self.network_type = "infiltratieriool"
 
     def calculate_cover_depth(self):
-        """Determine the depth """
+        """Determine the depth"""
 
         undirected_network = self.network.to_undirected()
         subgraphs = nx.weakly_connected_component_subgraphs(self.network)
