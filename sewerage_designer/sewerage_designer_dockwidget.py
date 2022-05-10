@@ -42,8 +42,8 @@ from qgis.core import (
 from qgis.core.additions.edit import edit
 
 from qgis_connector import *
-from sewerage_designer_core.sewerage_designer_classes import *
-from sewerage_designer_core.constants import *
+from designer.designer import *
+from designer.constants import *
 
 FORM_CLASS, _ = uic.loadUiType(
     os.path.join(os.path.dirname(__file__), "sewerage_designer_dockwidget_base.ui")
@@ -423,8 +423,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             minimum_freeboard = self.read_attribute_values(
                 global_settings_layer, "minimum_freeboard"
             )[0]
-            self.sewerage_network.calculate_max_hydraulic_gradient_internally(
-                waking=minimum_freeboard
+            self.sewerage_network.calculate_max_hydraulic_gradient_weirs(
+                freeboard=minimum_freeboard
             )
             # self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
 

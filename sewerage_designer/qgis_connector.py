@@ -5,7 +5,7 @@ from qgis.core import QgsFeature, QgsVectorLayer, QgsWkbTypes
 from PyQt5.QtCore import QVariant
 from qgis.core.additions.edit import edit
 
-from sewerage_designer_core.sewerage_designer_classes import (
+from designer.designer import (
     Pipe,
     Outlet,
     Weir,
@@ -13,7 +13,7 @@ from sewerage_designer_core.sewerage_designer_classes import (
     StormWaterPipeNetwork,
     WasteWaterPipeNetwork,
 )
-from sewerage_designer_core.constants import *
+from designer.constants import *
 
 ogr.UseExceptions()
 

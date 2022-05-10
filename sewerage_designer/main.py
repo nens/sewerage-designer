@@ -16,8 +16,8 @@ from osgeo import gdal, ogr
 import networkx as nx
 import json
 
-from sewerage_designer_core.constants import *
-from sewerage_designer_core.sewerage_designer_classes import (
+from core.constants import *
+from core.designer import (
     Pipe,
     Weir,
     BGTInloopTabel,
@@ -93,7 +93,9 @@ if __name__ == "__main__":
     stormwater_network.add_elevation_to_network(dem)
     stormwater_network.accumulate_connected_surface_area()
     n = stormwater_network
-    x = stormwater_network.calculate_max_hydraulic_gradient_sections(freeboard)
+    
+    n.calculate_max_hydraulic_gradient_weirs(freeboard)
+
 
     # velocity_to_high_pipe_fids = []
     # for pipe_id, pipe in stormwater_network.pipes.items():
@@ -107,60 +109,64 @@ if __name__ == "__main__":
 # Write some data # pip install threedi_raster_edits
 import threedi_raster_edits as tre
 
-vector =  tre.Vector.from_scratch("design", 5, 28992)
-vector.add_field("external_weir", int)
-vector.add_field("drowned", int)
-vector.add_field("branch", int)
-vector.add_field("internal", int)
-vector.add_field("hydraulic_gradient", float)
-vector.add_field("downstream_hydraulic_head", float)
-vector.add_field("upstream_hydraulic_head", float)
-vector.add_field("downstream_weir", int)
-vector.add_field("downstream_weir_elevation", float)
-vector.add_field("upstream_weir", int)
-vector.add_field("upstream_weir_elevation", float)
-vector.add_field("from_upstream_pipe", int)
-vector.add_field("from_upstream_weir", int)
-vector.add_field("to_downstream_weir", int)
-vector.add_field("to_downstream_pipe", int)
 
-
-for section in n.gradients[9]:
-    # createe geometry
-    all_points = [p.points for p in section.pipes]
-    multi = tre.MultiLineString.from_points(all_points)
-
-    if section.upstream_weir:
-        upstream_weir = section.upstream_weir.fid
-    else:
-        upstream_weir = None
-    
-    if section.downstream_weir:
-        downstream_weir = section.downstream_weir.fid
-    else:
-        downstream_weir = None
-    
-    
-    vector.add(fid=section.id,
-               geometry=multi,
-               external_weir=9,
-               internal=section.internal,
-               drowned=section.drowned,
-               hydraulic_gradient=section.hydraulic_gradient,
-               downstream_hydraulic_head=section.downstream_hydraulic_head,
-               downstream_weir=downstream_weir,
-               downstream_weir_elevation=section.downstream_weir_elevation,
-               upstream_hydraulic_head=section.upstream_hydraulic_head,
-               upstream_weir=upstream_weir,
-               upstream_weir_elevation=section.upstream_weir_elevation,
-               from_upstream_pipe=section.from_upstream_pipe,
-               from_upstream_weir=section.from_upstream_weir,
-               to_downstream_pipe=section.to_downstream_pipe,
-               to_downstream_weir=section.to_downstream_weir,
-               branch=section.branch
-               )
-    
-vector.write(r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/gradients_new2.gpkg")
-
+for external_weir_id in n.gradients:
+    for section in n.gradients[external_weir_id]:
+        
+        vector =  tre.Vector.from_scratch("design", 5, 28992)
+        vector.add_field("hydraulic_gradient", float)
+        vector.add_field("downstream_hydraulic_head", float)
+        vector.add_field("upstream_hydraulic_head", float)
+        vector.add_field("drowned", int)
+        vector.add_field("internal", int)
+        vector.add_field("branch", int)
+        vector.add_field("external_weir", int)
+        vector.add_field("downstream_weir", int)
+        vector.add_field("downstream_weir_elevation", float)
+        vector.add_field("upstream_weir", int)
+        vector.add_field("upstream_weir_elevation", float)
+        vector.add_field("from_upstream_pipe", int)
+        vector.add_field("from_upstream_weir", int)
+        vector.add_field("to_downstream_weir", int)
+        vector.add_field("to_downstream_pipe", int)
+        
+        
+        for section in n.gradients[external_weir_id]:
+            # createe geometry
+            all_points = [p.points for p in section.pipes]
+            multi = tre.MultiLineString.from_points(all_points)
+        
+            if section.upstream_weir:
+                upstream_weir = section.upstream_weir.fid
+            else:
+                upstream_weir = None
+            
+            if section.downstream_weir:
+                downstream_weir = section.downstream_weir.fid
+            else:
+                downstream_weir = None
+            
+            
+            vector.add(fid=section.id,
+                        geometry=multi,
+                        external_weir=external_weir_id,
+                        internal=section.internal,
+                        drowned=int(section.drowned),
+                        hydraulic_gradient=section.hydraulic_gradient,
+                        downstream_hydraulic_head=section.downstream_hydraulic_head,
+                        downstream_weir=downstream_weir,
+                        downstream_weir_elevation=section.downstream_weir_elevation,
+                        upstream_hydraulic_head=section.upstream_hydraulic_head,
+                        upstream_weir=upstream_weir,
+                        upstream_weir_elevation=section.upstream_weir_elevation,
+                        from_upstream_pipe=section.from_upstream_pipe,
+                        from_upstream_weir=section.from_upstream_weir,
+                        to_downstream_pipe=section.to_downstream_pipe,
+                        to_downstream_weir=section.to_downstream_weir,
+                       branch=section.branch
+                       )
+            
+        vector.write(rf"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/gradients_height_{external_weir_id}.gpkg")
+        vector = None
 
 
