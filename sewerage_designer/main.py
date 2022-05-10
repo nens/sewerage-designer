@@ -16,8 +16,8 @@ from osgeo import gdal, ogr
 import networkx as nx
 import json
 
-from core.constants import *
-from core.designer import (
+from designer.constants import *
+from designer.designer import (
     Pipe,
     Weir,
     BGTInloopTabel,

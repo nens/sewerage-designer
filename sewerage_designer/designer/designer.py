@@ -905,8 +905,6 @@ class PipeNetwork:
         if not section:
             return section, spare
 
-            # If that is done we need to change
-
         downstream_sections = []
         if section.above_freeboard:
             downstream = self.find_downstream_sections(section)
@@ -919,6 +917,8 @@ class PipeNetwork:
         current_elevation = self.furthest_pipe_height
         while section.above_freeboard and not section.between_weirs:
             current_elevation = current_elevation - step
+            if current_elevation < -20:
+                break
             print("resetting section", section.id, "elevation", current_elevation)
             # First we recompute the downstream sections to the new elevation.
             for downstream_section in downstream_sections:
@@ -1018,9 +1018,9 @@ class PipeNetwork:
                 continue
             print(weir.fid)
 
-            if weir.fid in [14]:
+            if weir.fid in [14, 76]:
                 continue
-            # if weir.fid != 16:
+            # if weir.fid != 74:
             #     continue
 
             # First we derive the furthest edge for computing the first
@@ -1298,7 +1298,6 @@ class PipeNetwork:
             from_weir = False
             pipe_node = None
             last = False
-            # print(pipe)
 
             # Internal - weir to weir when only one pipe.
             # We expect one weir to be used already.
@@ -1349,6 +1348,7 @@ class PipeNetwork:
                     if pipe_node:
                         internal = True
                         to_pipe = True
+                        end_weir = None
                         break
 
             # Internal - Pipe intersection
@@ -1359,6 +1359,7 @@ class PipeNetwork:
                 if len(intersects) > 2:
                     internal = True
                     to_pipe = True
+                    end_weir= None
 
             # Find out if last.
             # Something is last if there are no upstream things.
