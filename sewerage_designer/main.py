@@ -59,7 +59,7 @@ if __name__ == "__main__":
         wkt = geom.ExportToWkt()
         try:
             pipe = Pipe(
-                wkt_geometry=wkt, fid=props["id"], sewerage_type=props["sewerage_type"]
+                wkt_geometry=wkt, fid=feature.GetFID(), sewerage_type=props["sewerage_type"]
             )
         except Exception:
             print(feature.GetFID())
@@ -168,5 +168,21 @@ for external_weir_id in n.gradients:
             
         vector.write(rf"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/gradients_height_{external_weir_id}.gpkg")
         vector = None
+# Write some data # pip install threedi_raster_edits
+import threedi_raster_edits as tre
 
+# write upstream
+vector =  tre.Vector.from_scratch("design", 5, 28992)
+
+
+for section in n.upstream:
+    # createe geometry
+    all_points = [p.points for p in section.pipes]
+    multi = tre.MultiLineString.from_points(all_points)
+    vector.add(fid=section.id, geometry=multi)
+
+    
+
+vector.write(rf"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/upstream_13.gpkg")
+vector = None
 

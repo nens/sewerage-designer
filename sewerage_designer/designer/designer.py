@@ -770,7 +770,7 @@ class PipeNetwork:
         hydraulic_gradients = {}
         for weir in self.weirs.values():
             weir_node = weir._node_coordinate
-            distance_dictionary = self.distance_matrix_reversed[weir_node][0]
+            distance_dictionary = self.dmr[weir_node][0]
             furthest_node, distance = list(distance_dictionary.items())[-1]
             furthest_edge = list(self.network.edges(furthest_node))[0]
             furthest_pipe = self.get_pipe_with_edge(furthest_edge)
@@ -856,12 +856,6 @@ class PipeNetwork:
                         furthest_pipe_height,
                         self.distance(connected.upstream_weir.node, furthest_node),
                     )
-                    # print(hydraulic_gradient, section.id, connected.id)
-                    # print(
-                    #     connected.upstream_weir_elevation,
-                    #     furthest_pipe_height,
-                    #     self.distance(connected.upstream_weir.node, furthest_node),
-                    # )
 
                 section.upstream_hydraulic_head = section.downstream_hydraulic_head + (
                     hydraulic_gradient * section.length
@@ -918,7 +912,8 @@ class PipeNetwork:
         while section.above_freeboard and not section.between_weirs:
             current_elevation = current_elevation - step
             if current_elevation < -20:
-                break
+                break # a hard break, to make sure that it does not go on forever
+            
             print("resetting section", section.id, "elevation", current_elevation)
             # First we recompute the downstream sections to the new elevation.
             for downstream_section in downstream_sections:
@@ -1010,29 +1005,22 @@ class PipeNetwork:
 
         """
 
-        self.hydraulic_gradients = {pipe.fid: [] for pipe in self.pipes.values()}
-        dmr = self.distance_matrix_reversed
+        self.dmr = self.distance_matrix_reversed
 
         for weir in self.weirs.values():
             if not weir.external:  # lose the internal weirs.
                 continue
             print(weir.fid)
-
-            if weir.fid in [14, 76]:
-                continue
-            # if weir.fid != 74:
-            #     continue
-
-            # First we derive the furthest edge for computing the first
-            # hydraulic head.
-            weir_node = weir.node
-            distance_dictionary = dmr[weir_node][0]
-            furthest_node, distance = list(distance_dictionary.items())[-1]
-            furthest_edge = list(self.network.edges(furthest_node))[0]
-            furthest_pipe = self.get_pipe_with_edge(furthest_edge)
-
+            
+            
             # we set variables and the first hydraulic gradient.
             self.first_hydraulic_head = weir.flow_level
+            
+            # First we derive the furthest edge for computing the first
+            # hydraulic head.            
+            furthest_node, distance =  list(self.dmr[weir.node][0].items())[-1]
+            furthest_pipe = self.get_pipe_with_edge(list(self.network.edges(furthest_node))[0])
+
             self.furthest_pipe_distance = distance
             self.furthest_pipe_height = furthest_pipe.start_elevation - freeboard
             self.furthest_node = furthest_node
@@ -1040,7 +1028,8 @@ class PipeNetwork:
                 self.furthest_pipe_height - self.first_hydraulic_head
             ) / self.furthest_pipe_distance
 
-            # Upstream is sharef
+            # Upstream is shared. Once something is done in a section it will
+            # come back in self.upstream.
             self.upstream = self.split_into_sections(weir, freeboard)
 
             # The variables in this loop are start_height and hydraulic_gradient.
@@ -1048,7 +1037,6 @@ class PipeNetwork:
             for i, section in enumerate(self.upstream):
                 if not section.internal:
                     continue
-
                 section, spare = self._gradient_internal(section)
                 spared.append(spare)
 
@@ -1269,7 +1257,6 @@ class PipeNetwork:
 
 
         """
-        dmr = self.distance_matrix_reversed
         upstream = PipeSection(self.find_upstream_pipes(external_weir.node))
 
         sections = []
@@ -1363,9 +1350,9 @@ class PipeNetwork:
 
             # Find out if last.
             # Something is last if there are no upstream things.
-            if len(dmr[pipe.start_node][0]) == 1:
+            if len(self.dmr[pipe.start_node][0]) == 1:
                 last = True
-            elif len(dmr[pipe.end_node][0]) == 1:
+            elif len(self.dmr[pipe.end_node][0]) == 1:
                 last = True
 
             # Note that last is absolute, if something starts off as internal
