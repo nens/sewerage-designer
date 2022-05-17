@@ -436,14 +436,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             velocity_to_high_pipe_fids = []
             for pipe_id, pipe in self.sewerage_network.pipes.items():
                 pipe.calculate_discharge(intensity=peak_intensity)
-                pipe.calculate_diameter(vmax)
+                try:
+                    pipe.calculate_diameter(vmax)
+                except Exception as e:
+                    print(e)
+                    pipe.diameter = -9999
+                    pipe.velocity_to_high = True
+                    
                 pipe.set_material()
-
-                if pipe_id == 1182:
-                    print(pipe.diameter)
-
-                if pipe_id == 1180:
-                    print(pipe.diameter)
 
                 if pipe.velocity_to_high:
                     velocity_to_high_pipe_fids.append(pipe_id)

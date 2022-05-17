@@ -28,7 +28,7 @@ from designer.designer import (
 
 if __name__ == "__main__":
     pipe_ds = ogr.Open(
-        r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\processing\input\sd_format2.gpkg",
+        r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\processing\input\sd_format_zonder_gemengd3.gpkg",
         1,
     )
     pipe_layer = pipe_ds.GetLayer("sewerage")
@@ -91,19 +91,19 @@ if __name__ == "__main__":
 
     stormwater_network.add_id_to_nodes()
     stormwater_network.add_elevation_to_network(dem)
-    stormwater_network.accumulate_connected_surface_area()
+    #stormwater_network.accumulate_connected_surface_area()
     n = stormwater_network
     
     n.calculate_max_hydraulic_gradient_weirs(freeboard)
 
 
-    # velocity_to_high_pipe_fids = []
-    # for pipe_id, pipe in stormwater_network.pipes.items():
-    #     pipe.calculate_discharge(intensity=peak_intensity)
-    #     pipe.calculate_diameter(vmax)
-    #     pipe.set_material()
-    #     if pipe.velocity_to_high:
-    #         velocity_to_high_pipe_fids.append(pipe_id)
+    velocity_to_high_pipe_fids = []
+    for pipe_id, pipe in stormwater_network.pipes.items():
+        pipe.calculate_discharge(intensity=peak_intensity)
+        pipe.calculate_diameter(vmax)
+        pipe.set_material()
+        if pipe.velocity_to_high:
+            velocity_to_high_pipe_fids.append(pipe_id)
 
 
 # Write some data # pip install threedi_raster_edits

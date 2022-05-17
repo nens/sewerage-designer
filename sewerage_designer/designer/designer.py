@@ -888,16 +888,16 @@ class PipeNetwork:
 
         if section.from_upstream_weir:
             drowned = section.upstream_hydraulic_head >= section.upstream_weir_elevation
-        elif section.from_upstream_pipe:
+        else: 
             drowned = True
-
+        
         section.drowned = drowned
         if not drowned:
             section.upstream_hydraulic_head = section.upstream_weir_elevation
 
         return section, None
 
-    def _gradient_internal(self, section, step=0.01):
+    def _gradient_internal(self, section, step=0.05):
         """
         Calculates the hydraulic gradient for an internal section.
         params:
@@ -925,13 +925,26 @@ class PipeNetwork:
                     downstream_sections.append(dsection[0])
 
         # If the upstream hydraulic we will have to recalculate it all again.
+
         current_elevation = self.furthest_pipe_height
+
+        if section.above_freeboard:        
+            print(f"Recalculating section {section.id} because above current elevation")
+
         while section.above_freeboard and not section.between_weirs:
             current_elevation = current_elevation - step
-            if current_elevation < -20:
-                break # a hard break, to make sure that it does not go on forever
             
-            print("resetting section", section.id, "elevation", current_elevation)
+            #TODO
+            # A hard break. If elevation becomes lower than one meter
+            # we do a hard break. We actually don't know what is happening.
+            if abs(current_elevation - self.furthest_pipe_height) > 2:
+                print("Doing the hard break")
+                break
+            
+            # A similar break for this one.
+            if current_elevation < -20:
+                break 
+            
             # First we recompute the downstream sections to the new elevation.
             for downstream_section in downstream_sections:
                 downstream_section, _ = self._gradient_internal_calc(
@@ -1022,12 +1035,11 @@ class PipeNetwork:
 
         """
 
-        for weir in self.weirs.values():
-            if not weir.external:  # lose the internal weirs.
-                continue
-            print(weir.fid)
+        external_weirs = [weir for weir in self.weirs.values() if weir.external]
+        print("Amount of external weirs:", len(external_weirs))
+        for i, weir in enumerate(external_weirs):
+            print(f"{i} - Calculating gradients of {weir}")
         
-            
             # we set variables and the first hydraulic gradient.
             self.first_hydraulic_head = weir.flow_level
             
