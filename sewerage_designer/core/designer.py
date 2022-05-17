@@ -1017,12 +1017,6 @@ class PipeNetwork:
         for weir in self.weirs.values():
             if not weir.external:  # lose the internal weirs.
                 continue
-            print(weir.fid)
-
-            if weir.fid in [14]:
-                continue
-            # if weir.fid != 16:
-            #     continue
 
             # First we derive the furthest edge for computing the first
             # hydraulic head.

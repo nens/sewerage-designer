@@ -28,7 +28,7 @@ from designer.designer import (
 
 if __name__ == "__main__":
     pipe_ds = ogr.Open(
-        r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/sewerage_design_internal_weirs.gpkg",
+        r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\processing\input\sd_format2.gpkg",
         1,
     )
     pipe_layer = pipe_ds.GetLayer("sewerage")
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     vmax = 1.5
     peak_intensity = 57.6
 
-    dem = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\rijsbergen/rijsbergen.tif"
+    dem = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\zundert/Zundert.tif"
     bgt_inlooptabel_file = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\rijsbergen/bgt_inlooptabel_zundert.gpkg"
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)

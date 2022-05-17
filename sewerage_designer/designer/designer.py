@@ -656,6 +656,7 @@ class PipeNetwork:
         self.pipes = {}
         self.weirs = {}
         self.gradients = {}
+        self._cache = {}
 
     @property
     def reverse_network(self):
@@ -665,26 +666,46 @@ class PipeNetwork:
     @property
     def distance_matrix(self):
         """Returns a dictionary for each node a dictionary with distances to every other node"""
-        return dict(nx.all_pairs_dijkstra(self.network, weight="length"))
-
+        dm = self._cache.get("distance_matrix")
+        if not dm:
+            dm = dict(nx.all_pairs_dijkstra(self.network, weight="length"))
+            self._cache["distance_matrix"] = dm
+        return dm
+    
     @property
     def distance_matrix_reversed(self):
         """Returns a dictionary for each node a dictionary with distances to every other node"""
-        return dict(nx.all_pairs_dijkstra(self.reverse_network, weight="length"))
+        dmr = self._cache.get("distance_matrix_reversed")
+        if not dmr:
+            dmr = dict(nx.all_pairs_dijkstra(self.reverse_network, weight="length"))
+            self._cache["distance_matrix_reversed"] = dmr
+        return dmr
 
     @property
     def network_upstream_hydraulic_head(self):
         """Used to estimate the max hydraulic gradient"""
         if self.weir is not None:
             return self.weir.crest_flow_depth + self.weir.weir_level
+    
+    @property
+    def calculated_sections(self):
+        return [u for u in self.upstream if u.hydraulic_gradient != -9999]
 
     def gradient(self, height1, height2, distance):
         """calculates a simple gradient"""
         return (height2 - height1) / distance
 
     def distance(self, node_a, node_b):
-        return self.distance_matrix_reversed[node_a][0][node_b]
-
+        """  calculates the distance in a directed graph
+            If there is no directed connection we will return the global distance.
+        """
+        node_a_matrix = self.distance_matrix_reversed[node_a][0]
+        if node_b in node_a_matrix:
+            return node_a_matrix[node_b]
+        else:
+            line_wkt= f"LINESTRING ({node_a[0]} {node_a[1]}, {node_b[0]} {node_b[1]})"
+            return ogr.CreateGeometryFromWkt(line_wkt).Length()
+        
     def add_pipe(self, pipe: Pipe):
         """Add a pipe to the network as an object and as an edge to the graph"""
         self.pipes[pipe.fid] = pipe
@@ -888,13 +909,9 @@ class PipeNetwork:
             furthest_node: Furthest node.
         """
         assert section.internal == True
-
-        calculated_sections = [
-            u for u in self.upstream if u.hydraulic_gradient != -9999
-        ]
-
+        calculated_sections = self.calculated_sections
         section, spare = self._gradient_internal_calc(
-            section, calculated_sections, self.furthest_pipe_height, self.furthest_node
+            section, self.calculated_sections, self.furthest_pipe_height, self.furthest_node
         )
         if not section:
             return section, spare
@@ -1005,20 +1022,18 @@ class PipeNetwork:
 
         """
 
-        self.dmr = self.distance_matrix_reversed
-
         for weir in self.weirs.values():
             if not weir.external:  # lose the internal weirs.
                 continue
             print(weir.fid)
-            
+        
             
             # we set variables and the first hydraulic gradient.
             self.first_hydraulic_head = weir.flow_level
             
             # First we derive the furthest edge for computing the first
             # hydraulic head.            
-            furthest_node, distance =  list(self.dmr[weir.node][0].items())[-1]
+            furthest_node, distance =  list(self.distance_matrix_reversed[weir.node][0].items())[-1]
             furthest_pipe = self.get_pipe_with_edge(list(self.network.edges(furthest_node))[0])
 
             self.furthest_pipe_distance = distance
@@ -1350,9 +1365,9 @@ class PipeNetwork:
 
             # Find out if last.
             # Something is last if there are no upstream things.
-            if len(self.dmr[pipe.start_node][0]) == 1:
+            if len(self.distance_matrix_reversed[pipe.start_node][0]) == 1:
                 last = True
-            elif len(self.dmr[pipe.end_node][0]) == 1:
+            elif len(self.distance_matrix_reversed[pipe.end_node][0]) == 1:
                 last = True
 
             # Note that last is absolute, if something starts off as internal
