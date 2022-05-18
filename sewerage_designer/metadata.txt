@@ -6,7 +6,7 @@
 name=Sewerage Designer
 qgisMinimumVersion=3.16
 description=Design sewer systems 
-version=0.1
+version=1.0
 author=Nelen & Schuurmans
 email=info@nelen-schuurmans.nl
 
