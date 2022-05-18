@@ -33,5 +33,4 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     #
     from .sewerage_designer import SewerageDesigner
-
     return SewerageDesigner(iface)

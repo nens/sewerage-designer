@@ -1,188 +1,194 @@
-""" 
-Script om de sewerage designer in python af te trappen.
 
-"""
-
-
-import sys
-
-sys.path.insert(
-    0,
-    r"C:\Users\chris.kerklaan\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\sewerage_designer",
-)
 import os
 
 from osgeo import gdal, ogr
 import networkx as nx
 import json
 
-from designer.constants import *
-from designer.designer import (
-    Pipe,
-    Weir,
-    BGTInloopTabel,
-    PipeNetwork,
-    StormWaterPipeNetwork,
-    SewerageDesigner,
-)
+from sewerage_designer_core.constants import *
+from sewerage_designer_core.sewerage_designer_classes import Pipe, Weir, BGTInloopTabel, PipeNetwork, StormWaterPipeNetwork, SewerageDesigner
 
-if __name__ == "__main__":
-    pipe_ds = ogr.Open(
-        r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\processing\input\sd_format_zonder_gemengd3.gpkg",
-        1,
-    )
-    pipe_layer = pipe_ds.GetLayer("sewerage")
-    weir_layer = pipe_ds.GetLayer("weir")
+if __name__ == '__main__':
+    
+    pipe_ds = ogr.Open(r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\sewerage_designer_ontwerp_bas_v0_SINGLEPART.gpkg')
+    pipe_layer = pipe_ds.GetLayer('sewerage')
 
     # Settings
-    network_type = "infiltratieriool"
-    design_rain = "Bui09"
+    network_type = 'infiltratieriool'
+    design_rain = 'Bui10'
     waking = 0
-
-    freeboard = 0.2
-    vmax = 1.5
-    peak_intensity = 57.6
-
-    dem = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\zundert/Zundert.tif"
-    bgt_inlooptabel_file = r"C:\Users\chris.kerklaan\Documents\Projecten\bgt_inlooptool\data3\inlooptabel3.gpkg"
+    dem = './tests/test_data/Zundert.tif'
+    bgt_inlooptabel_file = r'G:\Projecten W (2021)\W0185 - Deltaplan Zundert\Gegevens\Bewerking\1. Concept HWA trace\bgt_inlooptabel_zundert.gpkg'
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
 
     # Define a new pipe network
     stormwater_network = StormWaterPipeNetwork()
-    n = stormwater_network
 
     # Add some pipes
-    for i, feature in enumerate(pipe_layer):
-        props = json.loads(feature.ExportToJson())["properties"]
+    for i,feature in enumerate(pipe_layer):
+        props = json.loads(feature.ExportToJson())['properties']
         geom = feature.GetGeometryRef()
         wkt = geom.ExportToWkt()
-        try:
-            pipe = Pipe(
-                wkt_geometry=wkt, fid=feature.GetFID(), sewerage_type=props["sewerage_type"]
-            )
-        except Exception:
-            print(feature.GetFID())
-            continue
+        pipe = Pipe(wkt_geometry=wkt, 
+                    fid=props['id'],
+                    sewerage_type=props['sewerage_type'])
         pipe.connected_surface_area = 1
-        pipe.sample_elevation_model(
-            dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform
-        )
+        pipe.sample_elevation_model(dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform)
         stormwater_network.add_pipe(pipe)
-
-    # Add some weirs
-    # Add some pipes
-    for i, feature in enumerate(weir_layer):
-        props = json.loads(feature.ExportToJson())["properties"]
-        geom = feature.GetGeometryRef()
-        wkt = geom.ExportToWkt()
-        weir = Weir(
-            wkt_geometry=wkt,
-            fid=feature.GetFID(),
-            crest_flow_depth=props["crest_flow_depth"],
-            weir_level=props["weir_level"],
-        )
+        
+    stormwater_network.add_id_to_nodes()
+    
+    pipe_fids = []
+    cycles = nx.simple_cycles(stormwater_network.network)
+    for cycle in cycles:
+        for i in range(0,len(cycle)-1):
+            edge = (cycle[i], cycle[i+1])
+            pipe = stormwater_network.get_pipe_with_edge(edge)
+            pipe_fids += [pipe.fid]
+            
+    string = 'asdfdas {}'.format(pipe_fids)
+    print(string)
+    
+    # Add an weir
+    # We can use the final pipe's coordinate
+    weir_1 = stormwater_network.pipes[43].end_coordinate
+    weir_2 = stormwater_network.pipes[31].end_coordinate
+    weir_1_geometry = 'POINT ' + str(weir_1).replace(',', '')
+    weir_2_geometry = 'POINT ' + str(weir_2).replace(',', '')
+    weirs = [weir_1_geometry, weir_2_geometry]
+    weir_levels = [6, 6.1]
+    for i, weir in enumerate(weirs):
+        weir = Weir(weir, i)
+        weir.crest_flow_depth = 0.1
+        weir.weir_level = weir_levels[i]
         stormwater_network.add_weir(weir)
-
-    # # Determine connected surface areas and the max hydraulic gradient for the whole network
+    
+    # Determine connected surface areas and the max hydraulic gradient for the whole network
     bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
     for pipe in stormwater_network.pipes.values():
         pipe.determine_connected_surface_area(bgt_inlooptabel)
 
-    stormwater_network.add_id_to_nodes()
-    stormwater_network.add_elevation_to_network(dem)
-    
+    # Network connected surface area    
     stormwater_network.accumulate_connected_surface_area()
-    n.calculate_max_hydraulic_gradient_weirs(freeboard)
+    stormwater_network.calculate_max_hydraulic_gradient(waking=waking)
+    stormwater_network.evaluate_hydraulic_gradient_upstream(waking=waking)
 
-
-    velocity_to_high_pipe_fids = []
+    # Calculate the capacity for all the pipes
     for pipe_id, pipe in stormwater_network.pipes.items():
-        pipe.calculate_discharge(intensity=peak_intensity)
-        pipe.calculate_diameter(vmax)
+        pipe.calculate_discharge(intensity=0.01)
+        pipe.calculate_diameter()
         pipe.set_material()
-        if pipe.velocity_to_high:
-            velocity_to_high_pipe_fids.append(pipe_id)
-
-
-# Write some data # pip install threedi_raster_edits
-import threedi_raster_edits as tre
-
-
-for external_weir_id in n.gradients:
-    for section in n.gradients[external_weir_id]:
         
-        vector =  tre.Vector.from_scratch("design", 5, 28992)
-        vector.add_field("hydraulic_gradient", float)
-        vector.add_field("downstream_hydraulic_head", float)
-        vector.add_field("upstream_hydraulic_head", float)
-        vector.add_field("drowned", int)
-        vector.add_field("internal", int)
-        vector.add_field("branch", int)
-        vector.add_field("external_weir", int)
-        vector.add_field("downstream_weir", int)
-        vector.add_field("downstream_weir_elevation", float)
-        vector.add_field("upstream_weir", int)
-        vector.add_field("upstream_weir_elevation", float)
-        vector.add_field("from_upstream_pipe", int)
-        vector.add_field("from_upstream_weir", int)
-        vector.add_field("to_downstream_weir", int)
-        vector.add_field("to_downstream_pipe", int)
-        
-        
-        for section in n.gradients[external_weir_id]:
-            # createe geometry
-            all_points = [p.points for p in section.pipes]
-            multi = tre.MultiLineString.from_points(all_points)
-        
-            if section.upstream_weir:
-                upstream_weir = section.upstream_weir.fid
-            else:
-                upstream_weir = None
-            
-            if section.downstream_weir:
-                downstream_weir = section.downstream_weir.fid
-            else:
-                downstream_weir = None
-            
-            
-            vector.add(fid=section.id,
-                        geometry=multi,
-                        external_weir=external_weir_id,
-                        internal=section.internal,
-                        drowned=int(section.drowned),
-                        hydraulic_gradient=section.hydraulic_gradient,
-                        downstream_hydraulic_head=section.downstream_hydraulic_head,
-                        downstream_weir=downstream_weir,
-                        downstream_weir_elevation=section.downstream_weir_elevation,
-                        upstream_hydraulic_head=section.upstream_hydraulic_head,
-                        upstream_weir=upstream_weir,
-                        upstream_weir_elevation=section.upstream_weir_elevation,
-                        from_upstream_pipe=section.from_upstream_pipe,
-                        from_upstream_weir=section.from_upstream_weir,
-                        to_downstream_pipe=section.to_downstream_pipe,
-                        to_downstream_weir=section.to_downstream_weir,
-                       branch=section.branch
-                       )
-            
-        vector.write(rf"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/gradients_height_{external_weir_id}.gpkg")
-        vector = None
-# Write some data # pip install threedi_raster_edits
-import threedi_raster_edits as tre
-
-# write upstream
-vector =  tre.Vector.from_scratch("design", 5, 28992)
-
-
-for section in n.upstream:
-    # createe geometry
-    all_points = [p.points for p in section.pipes]
-    multi = tre.MultiLineString.from_points(all_points)
-    vector.add(fid=section.id, geometry=multi)
-
+    # Determine the depth for all pipes
+    stormwater_network.set_invert_levels()
+    stormwater_network.check_invert_levels()
+    
+    # Draw network with a property
+    stormwater_network.draw_network(node_label_attr='id', edge_label_attr='fid')
     
 
-vector.write(rf"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\results\rijsbergen/upstream_13.gpkg")
-vector = None
+    # Hydraulic gradient calculations 
+    G = stormwater_network.network
+    weirs = stormwater_network.weirs
+    
+    # Get all weirs (out-degree=0) nodes in the network
+    # Calculate the hydraulic gradient to the furthest upstream point
+    # Calculate the hydraulic head at it's predecessors
+    # If the hydraulic head at the end of the pipe is lower than the lowest elevation
+        # Set the end hydraulic head to the lowest elevation
+        # Walk the network downstream using this hydraulic head and
+    # Walk the network upstream from each of these nodes
+    # At each pipe, calculate if the estmated hydraulic gradient is sufficient for it's lowest elevation
+    # If not, lower the gradient for all downstream pipes
+    # Calculate what the new hydraulic head will be at the start of the pipe
+    # Calculate the new hydraulic gradient for upstream pipes using the new hydraulic head
+    
+    def calculate_hydraulic_head_upstream():
+        pass
+    
+    def upstream_hydraulic_gradient(node):
+
+        if stormwater_network.network.in_degree[node] == 0:
+            return
+        else:
+            stack = stormwater_network.network.predecessors(node)
+            upstream_nodes = []
+            while stack:
+                try:
+                    in_node = next(stack)
+                    upstream_nodes += [in_node]
+                except StopIteration:
+                    break
+
+            distance_dictionary = stormwater_network.distance_matrix_reversed[node][0]
+            furthest_node, distance = list(distance_dictionary.items())[-1]
+            furthest_edge = list(stormwater_network.network.edges(furthest_node))[0]
+            furthest_pipe = stormwater_network.get_pipe_with_edge(furthest_edge)
+            
+            node_hydraulic_head = stormwater_network.network.nodes[node]['hydraulic_head']
+            
+            hydraulic_gradient = (
+                (furthest_pipe.start_elevation + waking)
+                - node_hydraulic_head
+            ) / distance
+            
+            for upstream_node in upstream_nodes:
+
+                upstream_edge = (upstream_node, node)
+                pipe = stormwater_network.get_pipe_with_edge(upstream_edge)
+                pipe_length = stormwater_network.network.edges[upstream_edge]['length']
+                upstream_hydraulic_head = node_hydraulic_head + (hydraulic_gradient * pipe_length)
+                
+                if upstream_hydraulic_head > pipe.lowest_elevation:
+                    upstream_hydraulic_head = pipe.lowest_elevation
+    
+                head_difference = (pipe.lowest_elevation - waking) - upstream_hydraulic_head
+                if head_difference < 0:
+                    hydraulic_gradient = hydraulic_gradient - (
+                        head_difference / pipe_length
+                    )
+                    upstream_hydraulic_head = node_hydraulic_head + (hydraulic_gradient * pipe_length)
+                    
+                # If the calculated hydraulic head is lower than present, write to downstream nodes
+                node_attrs = {upstream_node:{'hydraulic_head': upstream_hydraulic_head}}
+                nx.set_node_attributes(stormwater_network.network, node_attrs)
+                
+                edge_attrs = {upstream_node:{'max_hydraulic_gradient': hydraulic_gradient}}
+                nx.set_edge_attributes(stormwater_network.network, edge_attrs)
+            
+                _ = upstream_hydraulic_gradient(upstream_node)
+            
+            
+    for node in stormwater_network.network.nodes:
+        node_attrs = {node:{'hydraulic_head': None}}
+        nx.set_node_attributes(stormwater_network.network, node_attrs)
+            
+    for weir in stormwater_network.weirs.values():
+        weir_node = weir._node_coordinate
+        
+        # Set the hydraulic gradient at the weir node
+        node_attrs = {weir_node:{'hydraulic_head': weir.weir_level + weir.crest_flow_depth}}
+        nx.set_node_attributes(stormwater_network.network, node_attrs)
+        
+        _ = upstream_hydraulic_gradient(weir_node)
+
+        
+                        
+        
+        
+
+
+    
+    stormwater_network.draw_network(node_label_attr='fid', edge_label_attr='accumulated_connected_surface_area')
+        
+        
+        
+    
+    
+    
+    
+    
+    
 
