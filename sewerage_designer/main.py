@@ -44,13 +44,14 @@ if __name__ == "__main__":
     peak_intensity = 57.6
 
     dem = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\zundert/Zundert.tif"
-    bgt_inlooptabel_file = r"C:\Users\chris.kerklaan\Documents\Projecten\sewerage_designer\data\rijsbergen/bgt_inlooptabel_zundert.gpkg"
+    bgt_inlooptabel_file = r"C:\Users\chris.kerklaan\Documents\Projecten\bgt_inlooptool\data3\inlooptabel3.gpkg"
     dem_datasource = gdal.Open(dem)
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
 
     # Define a new pipe network
     stormwater_network = StormWaterPipeNetwork()
+    n = stormwater_network
 
     # Add some pipes
     for i, feature in enumerate(pipe_layer):
@@ -85,15 +86,14 @@ if __name__ == "__main__":
         stormwater_network.add_weir(weir)
 
     # # Determine connected surface areas and the max hydraulic gradient for the whole network
-    # bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
-    # for pipe in stormwater_network.pipes.values():
-    #     pipe.determine_connected_surface_area(bgt_inlooptabel)
+    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
+    for pipe in stormwater_network.pipes.values():
+        pipe.determine_connected_surface_area(bgt_inlooptabel)
 
     stormwater_network.add_id_to_nodes()
     stormwater_network.add_elevation_to_network(dem)
-    #stormwater_network.accumulate_connected_surface_area()
-    n = stormwater_network
     
+    stormwater_network.accumulate_connected_surface_area()
     n.calculate_max_hydraulic_gradient_weirs(freeboard)
 
 

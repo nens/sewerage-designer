@@ -925,9 +925,7 @@ class PipeNetwork:
                     downstream_sections.append(dsection[0])
 
         # If the upstream hydraulic we will have to recalculate it all again.
-
         current_elevation = self.furthest_pipe_height
-
         if section.above_freeboard:        
             print(f"Recalculating section {section.id} because above current elevation")
 
@@ -999,13 +997,8 @@ class PipeNetwork:
         if len(self.upstream) == 1:
             section.downstream_hydraulic_head = section.downstream_weir_elevation
             return section, None
-            
 
-        calculated_sections = [
-            u for u in self.upstream if u.hydraulic_gradient != -9999
-        ]
-        connections = section.find_connected_section(calculated_sections)
-
+        connections = section.find_connected_section(self.calculated_sections)
         if len(connections["downstream"]) > 0:
             connected = connections["downstream"][0]
         else:

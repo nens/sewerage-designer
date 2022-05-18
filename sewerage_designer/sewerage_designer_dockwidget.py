@@ -440,7 +440,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     pipe.calculate_diameter(vmax)
                 except Exception as e:
                     print(e)
-                    pipe.diameter = -9999
+                    pipe.diameter = 9999
                     pipe.velocity_to_high = True
                     
                 pipe.set_material()
