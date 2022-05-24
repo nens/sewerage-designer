@@ -1029,6 +1029,8 @@ class PipeNetwork:
         """
 
         external_weirs = [weir for weir in self.weirs.values() if weir.external]
+        
+        
         print("Amount of external weirs:", len(external_weirs))
         for i, weir in enumerate(external_weirs):
             print(f"{i} - Calculating gradients of {weir}")
@@ -1039,6 +1041,11 @@ class PipeNetwork:
             # First we derive the furthest edge for computing the first
             # hydraulic head.            
             furthest_node, distance =  list(self.distance_matrix_reversed[weir.node][0].items())[-1]
+            
+            # loose weir
+            if distance == 0:
+                continue 
+            
             furthest_pipe = self.get_pipe_with_edge(list(self.network.edges(furthest_node))[0])
 
             self.furthest_pipe_distance = distance
