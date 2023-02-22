@@ -24,6 +24,7 @@
 import traceback
 import os
 import sys
+import subprocess
 
 sys.path.append(os.path.dirname(__file__))
 from qgis import processing
@@ -93,6 +94,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.pushButton_ComputeDepths.clicked.connect(
             self.pushbutton_computeDepths_isChecked
         )
+        self.radioButton_Help.clicked.connect(
+            self.radiobutton_help_isChecked
+        )        
 
     def add_group(self, group_name):
         root = QgsProject.instance().layerTreeRoot()
@@ -640,6 +644,22 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def pushbutton_computeDepths_isChecked(self):
         self.validate_depths()
+
+    def radiobutton_help_isChecked(self):
+        url = r"https://github.com/nens/sewerage-designer/blob/main/20220524%20Gebruikershandleiding%20Sewerage%20Designer.pdf"
+        self.open_url(url)
+        self.radioButton_Help.setChecked(False)
+        
+    def open_url(self, url):
+        if sys.platform=='win32':
+            os.startfile(url)
+        elif sys.platform=='darwin':
+            subprocess.Popen(['open', url])
+        else:
+            try:
+                subprocess.Popen(['xdg-open', url])
+            except OSError:
+                self.info_message('Please open a browser on: '+url)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()

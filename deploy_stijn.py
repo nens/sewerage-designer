@@ -6,7 +6,7 @@ PLUGIN_DIR_NAME = "sewerage_designer"
 this_dir = os.path.dirname(os.path.realpath(__file__))
 home_dir = os.path.expanduser("~")
 dest_dir_plug = os.path.join(
-    home_dir, "AppData", "Roaming", "QGIS", "QGIS3", "profiles", "seweragedesigner", "python", "plugins", PLUGIN_DIR_NAME
+    home_dir, "AppData", "Roaming", "3Di", "QGIS3", "profiles", "sd", "python", "plugins", PLUGIN_DIR_NAME
 )
 print(dest_dir_plug)
 src_dir_plug = os.path.join(this_dir, PLUGIN_DIR_NAME)

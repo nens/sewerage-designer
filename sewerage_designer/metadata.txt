@@ -5,13 +5,20 @@
 [general]
 name=Sewerage Designer
 qgisMinimumVersion=3.16
-description=Design sewer systems 
+description=The Sewerage Designer computes the required sizing and depth of a stormwater sewer system.
+about=Input:
+	 - sewer system geometry (gpkg)
+	 - Digital Elevation Model (DEM) (raster)
+	 - BGT inlooptabel (gpkg)
+	 - design rainfall event (peak intensity in mm/hour)
+	
+	Output:
+	 - sewer system geometry including diameters and depths (gpkg)
+
+	For detailed information please check the manual. Click 'Open manual' in the plug-in.
 version=1.0.1
 author=Nelen & Schuurmans
 email=info@nelen-schuurmans.nl
-
-about=Design sewer systems
-
 tracker=https://github.com/nens/sewerage-designer/issues
 repository=https://github.com/nens/sewerage-designer
 # End of mandatory metadata
@@ -23,13 +30,13 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=sewerage, design
+tags=sewerage, sewer, automatic, design, validation, BGT
 
 homepage=https://www.nelen-schuurmans.nl
 category=Plugins
 icon=icon.png
 # experimental flag
-experimental=True
+experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
@@ -40,7 +47,7 @@ deprecated=False
 # plugin_dependencies=
 
 Category of the plugin: Raster, Vector, Database or Web
-# category=
+# category=Raster,Vector,Database
 
 # If the plugin can run on QGIS Server.
 server=False
