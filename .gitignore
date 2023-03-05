@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 sewerage_designer/tests/system_zundert/dem.tif
+sewerage_designer/tests/system_zundert/sewerage_designer.gpkg-wal
+sewerage_designer/tests/system_zundert/sewerage_designer.gpkg-shm
+sewerage_designer/tests/system_zundert/sewerage_designer.gpkg
+sewerage_designer/tests/system_zundert/sewerage_designer.gpkg

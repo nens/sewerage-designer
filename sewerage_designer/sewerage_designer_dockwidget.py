@@ -386,13 +386,18 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             if response == QtWidgets.QMessageBox.Help:
                 self.traceback_message(trace)
 
-    def read_attribute_values(self, layer, field):
-        "return alls attribute values of a certain field of certain layer"
+    def read_global_settings_value(self, layer, field):
+        "return attribute field"
         values = []
         for feature in layer.getFeatures():
             values.append(float(feature[field]))
-        return values
-
+        if not values:
+            raise ValueError("Global settings layer is empty. Please define settings.")
+        if len(values) == 1:
+            return values[0]
+        else:
+            raise ValueError("Multiple settings have been defined in the global settings layer. "
+                             "Please fill in only once.")
     def compute_diameters(self):
         """Compute diameters for the current network and design rainfall event"""
         try:
@@ -425,17 +430,17 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             DEM = self.get_DEM()
             self.sewerage_network.add_elevation_to_network(DEM)
             global_settings_layer = self.get_map_layer("global_settings")
-            minimum_freeboard = self.read_attribute_values(
+            minimum_freeboard = self.read_global_settings_value(
                 global_settings_layer, "minimum_freeboard"
-            )[0]
+            )
             self.sewerage_network.calculate_max_hydraulic_gradient_weirs(
                 freeboard=minimum_freeboard
             )
             # self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
 
-            vmax = self.read_attribute_values(
+            vmax = self.read_global_settings_value(
                 global_settings_layer, "maximum_velocity"
-            )[0]
+            )
             peak_intensity = self.get_final_peak_intensity_from_lineedit()
 
             velocity_to_high_pipe_fids = []
@@ -522,9 +527,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 return
 
             global_settings_layer = self.get_map_layer("global_settings")
-            minimum_cover_depth = self.read_attribute_values(
+            minimum_cover_depth = self.read_global_settings_value(
                 global_settings_layer, "minimum_cover_depth"
-            )[0]
+            )
             DEM = self.get_DEM()
             self.sewerage_network.add_elevation_to_network(
                 DEM
