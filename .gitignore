@@ -3,4 +3,4 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-sewerage_designer/tests/test_data/Zundert.tif
+sewerage_designer/tests/system_zundert/dem.tif

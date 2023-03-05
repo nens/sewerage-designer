@@ -6,6 +6,10 @@ Created on Wed Dec  8 14:49:31 2021
 @author: Chris.Kerklaan
 
 """
+# @Leendert
+# TODO seems too much code for one script
+# TODO the hydraulic gradient computation seems rushed, chaotic and maybe even unfinished
+# TODO mistake in calculate_cover_depth: subgraphs created without edges
 # TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
 
 # First-party imports
@@ -171,14 +175,14 @@ class BGTInloopTabel:
         tabel_abspath = os.path.abspath(bgt_inlooptabel_fn)
         if not os.path.isfile(tabel_abspath):
             raise FileNotFoundError(
-                "BGT Inlooptabel niet gevonden: {}".format(tabel_abspath)
+                "BGT Inlooptabel not found: {}".format(tabel_abspath)
             )
         tabel_ds = ogr.Open(tabel_abspath)
         # TODO more thorough checks of validity of input geopackage
         try:
             self.layer = tabel_ds.GetLayer(0)
         except Exception:
-            raise ValueError("Geen geldig bestand, {}".format(tabel_abspath))
+            raise ValueError("Not a valid file, {}".format(tabel_abspath))
 
         self.fields = self.get_layer_fields()
         for field in BGT_INLOOPTABEL_REQUIRED_FIELDS:
@@ -682,12 +686,6 @@ class PipeNetwork:
         return dmr
 
     @property
-    def network_upstream_hydraulic_head(self):
-        """Used to estimate the max hydraulic gradient"""
-        if self.weir is not None:
-            return self.weir.crest_flow_depth + self.weir.weir_level
-    
-    @property
     def calculated_sections(self):
         return [u for u in self.upstream if u.hydraulic_gradient != -9999]
 
@@ -771,6 +769,8 @@ class PipeNetwork:
                 dem_rasterband=dem_rasterband, dem_geotransform=dem_geotransform
             )
 
+    # TODO not used -> can be removed?
+    '''
     def calculate_max_hydraulic_gradient(self, waking: float):
         """
         Calculates the max hydraulic gradient based on the network end point and start/end elevation
@@ -819,6 +819,7 @@ class PipeNetwork:
                 self.pipes[pipe_fid], "max_hydraulic_gradient", max_hydraulic_gradient
             )
 
+    '''
     def _gradient_internal_calc(
         self, section, calculated_sections, furthest_pipe_height, furthest_node
     ):
@@ -1011,8 +1012,8 @@ class PipeNetwork:
         """
         Calculates the max hydraulic gradient with internal and external weirs.
         For each external weir, the max hydraulic gradient is calculated by looking at
-        the difference between the start elevation of the furthest pipe with the level of the external weir [weir_level + crest_flow_level].
-
+        the difference between the start elevation of the furthest pipe with the level of the external weir
+        [weir_level + crest_flow_level].
 
         We use the hydraulic gradient to calculate the hydraulic head above
         each weir. If a weir is drowned we keep the gradient and use the
@@ -1033,8 +1034,7 @@ class PipeNetwork:
         
         print("Amount of external weirs:", len(external_weirs))
         for i, weir in enumerate(external_weirs):
-            print(f"{i} - Calculating gradients of {weir}")
-        
+
             # we set variables and the first hydraulic gradient.
             self.first_hydraulic_head = weir.flow_level
             
@@ -1042,11 +1042,13 @@ class PipeNetwork:
             # hydraulic head.            
             furthest_node, distance =  list(self.distance_matrix_reversed[weir.node][0].items())[-1]
             
-            # loose weir
-            if distance == 0:
-                continue 
-            
-            furthest_pipe = self.get_pipe_with_edge(list(self.network.edges(furthest_node))[0])
+            try:
+                furthest_pipe = self.get_pipe_with_edge(list(self.network.edges(furthest_node))[0])
+                print(f"calculating gradients of {weir}")
+            except:
+                print(f"skipping loose {weir} at {furthest_node}")
+                continue
+                #TODO what is the definition of a "loose weir" and why are there so many
 
             self.furthest_pipe_distance = distance
             self.furthest_pipe_height = furthest_pipe.start_elevation - freeboard
@@ -1552,7 +1554,7 @@ class PipeNetwork:
 
 
 class StormWaterPipeNetwork(PipeNetwork):
-    # TODO maybe rename to StormWaterPipeNetwork
+
     def __init__(self):
         super().__init__()
         self.network_type = "infiltratieriool"
@@ -1561,7 +1563,8 @@ class StormWaterPipeNetwork(PipeNetwork):
         """Determine the depth"""
 
         undirected_network = self.network.to_undirected()
-        subgraphs = nx.weakly_connected_component_subgraphs(self.network)
+        #TODO undirected_network unused, in fact does not work for retrieving subgraphs, what to do with it?
+        subgraphs = (self.network.subgraph(c) for c in nx.weakly_connected_components(self.network))
 
         for subgraph in subgraphs:
             subgraph_edges = subgraph.edges
@@ -1575,7 +1578,13 @@ class StormWaterPipeNetwork(PipeNetwork):
                 if closest_weir.weir_level < lowest_weir_height:
                     lowest_weir_height = closest_weir.weir_level
 
-            max_diameter = max([pipe.diameter for pipe in network_pipes])
+            if network_pipes:
+                max_diameter = max([pipe.diameter for pipe in network_pipes])
+            else:
+                print(f"DiGraph is invalid, we cannot validate depth. "
+                      f"subgraph_edges = {subgraph.edges}, "
+                      f"subgraph_nodes = {subgraph.nodes}")
+                # TODO how is this possible? is this user input that should be improved? if so improve checkers
 
             for pipe in network_pipes:
                 material_thickness = MATERIAL_THICKNESS[pipe.material]

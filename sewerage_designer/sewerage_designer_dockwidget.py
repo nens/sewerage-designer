@@ -333,7 +333,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     )
 
                 if len(pipes_without_weir) > 0:
-                    message = f"Network has pipes that are not connected to a weir, pipe FIDs: {pipes_without_weir}"
+                    message = f"Network has pipes {len(pipes_without_weir)} \
+                    that are not connected to a weir, pipe FIDs: {pipes_without_weir}"
                     layer_name = "Pipes without a weir"
                     fields_of_interest = ["fid"]
                     self.mistakes_in_network_error(

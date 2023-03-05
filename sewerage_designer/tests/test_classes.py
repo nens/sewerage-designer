@@ -1,23 +1,76 @@
 import pytest
-from osgeo import gdal, ogr, osr
+from osgeo import gdal, ogr
 import pathlib
 import json
-import sys
 
-from sewerage_designer.sewerage_designer_core.sewerage_designer_classes import (
-    Pipe,
-    Weir,
+from sewerage_designer.designer.sewerage_designer_classes import (
     BGTInloopTabel,
+    Weir,
+    Outlet,
+    Pipe,
     PipeNetwork,
     StormWaterPipeNetwork,
+    SewerageDesigner
 )
 
-TEST_DIRECTORY = pathlib.Path(__file__).parent.absolute() / "test_data"
+TEST_DIRECTORY = pathlib.Path(__file__).parent.absolute()
+
+@pytest.fixture(scope="module")
+def bgt_inlooptabel():
+    bgt_inlooptabel_fn = TEST_DIRECTORY / "bgt_inloop/bgt_inlooptabel_test_mesh_design_2.gpkg"
+    return BGTInloopTabel(bgt_inlooptabel_fn)
+
+def test_get_layer_fields(bgt_inlooptabel):
+    fields = bgt_inlooptabel.get_layer_fields()
+    assert len(fields) == 4
+    assert "code" in fields
+    assert "surface_area" in fields
+
+def test_set_table(bgt_inlooptabel):
+    bgt_inlooptabel.set_table()
+    assert hasattr(bgt_inlooptabel, "_table")
+    assert len(bgt_inlooptabel._table) == 6
+    assert "fid" in bgt_inlooptabel._table
+    assert "surface_area" in bgt_inlooptabel._table
+
+def test_get_surface_area_for_pipe_code(bgt_inlooptabel):
+
+    surface_area = bgt_inlooptabel.get_surface_area_for_pipe_code(
+        pipe_code=6, pipe_type="infiltratievoorziening"
+    )
+    assert pytest.approx(surface_area) == 65.6751
+
+
+@pytest.fixture(scope="module")
+def weir():
+    # Example WKT geometry for a weir
+    wkt_geometry = "POINT(1 1)"
+    return Weir(wkt_geometry, fid=1, weir_level=2.0, crest_flow_depth=1.0, pipe_in_id=2, pipe_out_id=3)
+
+def test_init(weir):
+    assert isinstance(weir.geometry, ogr.Geometry)
+    assert weir.geometry.GetGeometryName() == "POINT"
+    assert weir.fid == 1
+    assert weir.weir_level == 2.0
+    assert weir.crest_flow_depth == 1.0
+    assert weir.pipe_in_id == 2
+    assert weir.pipe_out_id == 3
+
+def test_wkt_geometry(weir):
+    assert weir.wkt_geometry == "POINT (1 1)"
+
+def test_coordinate(weir):
+    assert weir.coordinate == (1.0, 1.0)
+
+def test_node(weir):
+    weir._node_coordinate = (1.0, 1.0)
+    assert weir.node == (1.0, 1.0)
+
 
 
 def test_add_pipe():
     """Adds pipes from the simple testcase to a network"""
-    simple_network_pipe_json = TEST_DIRECTORY / "pipes_simple_network.json"
+    simple_network_pipe_json = TEST_DIRECTORY / "unit/pipes_simple_network.json"
     pipes = json.load(open(simple_network_pipe_json, "r"))
 
     stormwaternetwork = StormWaterPipeNetwork()
@@ -36,7 +89,7 @@ def test_sample_elevation():
     dem_rasterband = dem_datasource.GetRasterBand(1)
     dem_geotransform = dem_datasource.GetGeoTransform()
 
-    simple_network_pipe_json = TEST_DIRECTORY / "pipes_simple_network.json"
+    simple_network_pipe_json = TEST_DIRECTORY / "unit/pipes_simple_network.json"
     pipes = json.load(open(simple_network_pipe_json, "r"))
 
     pipe = Pipe(pipes[0], 1)
@@ -51,7 +104,7 @@ def test_sample_elevation():
 
 def test_add_weir():
     """Test adding a weir to the network"""
-    simple_network_weir_json = TEST_DIRECTORY / "weir_simple_network.json"
+    simple_network_weir_json = TEST_DIRECTORY / "unit/weir_simple_network.json"
     weirs = json.load(open(simple_network_weir_json, "r"))
 
     stormwaternetwork = StormWaterPipeNetwork()
@@ -60,26 +113,6 @@ def test_add_weir():
 
     assert stormwaternetwork.weir is not None
     assert len(stormwaternetwork.network.nodes) == 1
-
-
-def test_bgt_inlooptabel():
-    """Get surface area for pipe id's"""
-    bgt_inlooptabel_file = TEST_DIRECTORY / "bgt_inlooptabel_test.gpkg"
-    bgt_inlooptabel = BGTInloopTabel(bgt_inlooptabel_file)
-    surface_area_6 = bgt_inlooptabel.get_surface_area_for_pipe_code(
-        pipe_code=6, pipe_type="infiltratievoorziening"
-    )
-    surface_area_7 = bgt_inlooptabel.get_surface_area_for_pipe_code(
-        pipe_code=7, pipe_type="infiltratievoorziening"
-    )
-    surface_area_8 = bgt_inlooptabel.get_surface_area_for_pipe_code(
-        pipe_code=8, pipe_type="infiltratievoorziening"
-    )
-
-    assert pytest.approx(surface_area_6) == 65.6751
-    assert pytest.approx(surface_area_7) == 53.90597
-    assert pytest.approx(surface_area_8) == 114.7000
-
 
 def test_network_connected_surface_area_simple_network():
     """Test aggregated surface areas along the network"""
@@ -101,7 +134,7 @@ def test_network_connected_surface_area_simple_network():
 def test_network_connected_surface_area_mesh_network():
     """Test aggregated surface areas along the network, for a meshed network"""
 
-    pipe_fn = TEST_DIRECTORY / "test_pipes_simple_mesh_design.gpkg"
+    pipe_fn = TEST_DIRECTORY / "unit/test_pipes_simple_mesh_design.gpkg"
     pipe_ds = ogr.Open(str(pipe_fn))
     pipe_layer = pipe_ds.GetLayer(0)
     stormwaternetwork = StormWaterPipeNetwork()
@@ -126,7 +159,7 @@ def test_network_connected_surface_area_mesh_network():
 def test_network_connected_surface_area_mesh_network_2():
     """Test aggregated surface areas along the network, for a meshed network"""
 
-    pipe_fn = TEST_DIRECTORY / "test_pipes_mesh_design_2.gpkg"
+    pipe_fn = TEST_DIRECTORY / "unit/test_pipes_mesh_design_2.gpkg"
     pipe_ds = ogr.Open(str(pipe_fn))
     pipe_layer = pipe_ds.GetLayer(0)
     stormwaternetwork = StormWaterPipeNetwork()
@@ -151,7 +184,7 @@ def test_network_connected_surface_area_mesh_network_2():
 def test_network_connected_surface_area_mesh_network_2_variable_connected_area():
     """Test aggregated surface areas along the network, for a meshed network"""
 
-    pipe_fn = TEST_DIRECTORY / "test_pipes_mesh_design_2.gpkg"
+    pipe_fn = TEST_DIRECTORY / "unit/test_pipes_mesh_design_2.gpkg"
     pipe_ds = ogr.Open(str(pipe_fn))
     pipe_layer = pipe_ds.GetLayer(0)
     stormwaternetwork = StormWaterPipeNetwork()

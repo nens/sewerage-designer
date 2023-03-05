@@ -8,6 +8,7 @@ Created on Wed Dec  8 14:49:31 2021
 
 # First-party imports
 import os
+from typing import Dict, List
 import json
 import numpy as np
 
@@ -161,19 +162,17 @@ class InvalidGeometryException(Exception):
 
 
 class BGTInloopTabel:
-    def __init__(self, bgt_inlooptabel_fn):
+    def __init__(self, bgt_inlooptabel_fn: str) -> None:
 
         tabel_abspath = os.path.abspath(bgt_inlooptabel_fn)
         if not os.path.isfile(tabel_abspath):
             raise FileNotFoundError(
-                "BGT Inlooptabel niet gevonden: {}".format(tabel_abspath)
+                "BGT Inlooptabel was not found: {}".format(tabel_abspath)
             )
         tabel_ds = ogr.Open(tabel_abspath)
-        # TODO more thorough checks of validity of input geopackage
-        try:
-            self.layer = tabel_ds.GetLayer(0)
-        except Exception:
-            raise ValueError("Geen geldig bestand, {}".format(tabel_abspath))
+        if tabel_ds is None or tabel_ds.GetLayerCount() == 0:
+            raise ValueError(f"Could not open Inlooptabel file: {tabel_abspath}")
+        self.layer = tabel_ds.GetLayer(0)
 
         self.fields = self.get_layer_fields()
         for field in BGT_INLOOPTABEL_REQUIRED_FIELDS:
@@ -186,17 +185,12 @@ class BGTInloopTabel:
         # Log in the table instance which surfaces have already been coupled to a pipe
         self.connected_surfaces = []
 
-    def get_layer_fields(self):
-        """Sets the layers fields"""
-        fields = []
-        ldefn = self.layer.GetLayerDefn()
-        for n in range(ldefn.GetFieldCount()):
-            fdefn = ldefn.GetFieldDefn(n)
-            fields.append(fdefn.name)
+    def get_layer_fields(self) -> List[str]:
+        """Returns a list of the field names in the layer."""
+        return [self.layer.GetLayerDefn().GetFieldDefn(i).name
+                for i in range(self.layer.GetLayerDefn().GetFieldCount())]
 
-        return fields
-
-    def set_table(self):
+    def set_table(self) -> None:
         """Sets the table if not exists"""
         if not hasattr(self, "_table"):
             self.table_fields = self.fields + ["fid", "surface_area"]
@@ -210,7 +204,9 @@ class BGTInloopTabel:
                 self._table["fid"].append(feature.GetFID())
                 self._table["surface_area"].append(feature_geometry.GetArea())
 
-    def get_surface_area_for_pipe_code(self, pipe_code, pipe_type):
+    def get_surface_area_for_pipe_code(
+        self, pipe_code: str, pipe_type: str
+    ) -> float:
         """Get the connected surface area for a pipe code and which type of sewerage system should be searched"""
         pipe_type_codes = self._table["pipe_code_" + pipe_type]
         surface_areas = []
@@ -692,9 +688,6 @@ class PipeNetwork:
             max_hydraulic_gradient = min(self.hydraulic_gradients[pipe_fid])
             self.pipes[pipe_fid].max_hydraulic_gradient = max_hydraulic_gradient
 
-        print("1180", self.hd_data[1180])
-        print("1182", self.hd_data[1182])
-
     def accumulate_connected_surface_area(self):
         """For each pipe in the network, accumulate downstream connected area"""
 
@@ -859,7 +852,7 @@ class PipeNetwork:
 
 
 class StormWaterPipeNetwork(PipeNetwork):
-    # TODO maybe rename to StormWaterPipeNetwork
+
     def __init__(self):
         super().__init__()
         self.network_type = "infiltratieriool"

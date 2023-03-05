@@ -113,25 +113,13 @@ class ColebrookWhite:
         return Scalc
 
     def iterate_diameters(self):
-        print("intial velocity=" f"{self.vmax}")
-        print("q=" f"{self.q}")
-        print("first guess D=" f"{self.D_precise}")
-        print("D_design=" f"{self.D_design}")
         self.vmax = (
             self.calc_vmax()
         )  # compute vmax corresponding to D_design before computing Scalc
-        print("calc_vmax=" f"{self.vmax}")
         Scalc = self.colebrook_white()
-        print("Scalc=" f"{Scalc}")
-        print(self.D_design, self.d_options[-1])
         while Scalc > self.Smax and self.D_design != self.d_options[-1]:
-            print("Scalc=" f"{Scalc}")
-            print("Smax=" f"{self.Smax}")
             self.increase_diameter()
-            print("increase_diameter:D_design=" f"{self.D_design}")
             self.vmax = self.calc_vmax()
-            print("calc_vmax=" f"{self.vmax}")
             Scalc = self.colebrook_white()
-            print("colebrook_white_Scalc=" f"{Scalc}")
 
         return self.D_design, self.vmax
