@@ -9,7 +9,6 @@ Created on Wed Dec  8 14:49:31 2021
 # @Leendert
 # TODO seems too much code for one script
 # TODO the hydraulic gradient computation seems rushed, chaotic and maybe even unfinished
-# TODO mistake in calculate_cover_depth: subgraphs created without edges
 # TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
 
 # First-party imports
