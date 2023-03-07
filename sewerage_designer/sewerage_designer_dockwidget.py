@@ -393,7 +393,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # see create_network_from_layers
         try:
             global_settings_layer = self.get_map_layer("global_settings")
-            pipe_layer = self.get_map_layer("sewerage")
+            sewerage_layer = self.get_map_layer("sewerage")
             weir_layer = self.get_map_layer("weir")
             pumping_station_layer = self.get_map_layer("pumping_station")
             outlet_layer = self.get_map_layer("outlet")
@@ -402,7 +402,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.something_went_wrong_message(message)
         return (
             global_settings_layer,
-            pipe_layer,
+            sewerage_layer,
             weir_layer,
             pumping_station_layer,
             outlet_layer,
@@ -412,7 +412,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
 
-        #TODO I need to get the sewerage designer layers and make them input for all the workers
+        (
+            global_settings_layer,
+            sewerage_layer,
+            weir_layer,
+            pumping_station_layer,
+            outlet_layer,
+        ) = self.get_sewerage_designer_layers()
 
         #TODO CHECK CHECKERS ON THIS INPUT
         try:
@@ -421,11 +427,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             message = "BGT inlooptabel not defined."
             self.something_went_wrong_message(message)
 
-        sewerage_layer = self.get_map_layer("sewerage")
-
         self.worker_compute_cs = Worker(
             process = "Compute CS",
+            global_settings_layer = global_settings_layer,
             sewerage_layer = sewerage_layer,
+            weir_layer = weir_layer,
+            outlet_layer = outlet_layer,
+            pumping_station_layer = pumping_station_layer,
             bgt_inlooptabel_fn = bgt_inlooptabel_fn
         )
         self.worker_compute_cs.progress_changed.connect(self.update_progress)
@@ -450,6 +458,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def pushbutton_computeDiameters_isChecked(self):
         """Compute diameters for the current network and design rainfall event"""
 
+        (
+            global_settings_layer,
+            sewerage_layer,
+            weir_layer,
+            pumping_station_layer,
+            outlet_layer,
+        ) = self.get_sewerage_designer_layers()
+
         #TODO CHECK CHECKERS ON THIS INPUT
         dem = self.get_DEM()
         global_settings_layer = self.get_map_layer("global_settings")
@@ -460,11 +476,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             global_settings_layer, "maximum_velocity"
         )
         peak_intensity = self.get_final_peak_intensity_from_lineedit()
-        sewerage_layer = self.get_map_layer("sewerage")
 
         self.worker_compute_diameters = Worker(
             process = "Compute Diameters",
+            global_settings_layer = global_settings_layer,
             sewerage_layer = sewerage_layer,
+            weir_layer = weir_layer,
+            outlet_layer = outlet_layer,
+            pumping_station_layer = pumping_station_layer,
             dem = dem,
             minimum_freeboard = minimum_freeboard,
             vmax = vmax,
@@ -494,18 +513,28 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def pushbutton_computeDepths_isChecked(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
 
+        (
+            global_settings_layer,
+            sewerage_layer,
+            weir_layer,
+            pumping_station_layer,
+            outlet_layer,
+        ) = self.get_sewerage_designer_layers()
+
         #TODO CHECK CHECKERS ON THIS INPUT
         global_settings_layer = self.get_map_layer("global_settings")
         minimum_cover_depth = self.read_global_settings_value(
             global_settings_layer, "minimum_cover_depth"
         )
         dem = self.get_DEM()
-
-        sewerage_layer = self.get_map_layer("sewerage")
         
         self.worker_validate_depths = Worker(
             process = "Validate Depths",
+            global_settings_layer = global_settings_layer,
             sewerage_layer = sewerage_layer,
+            weir_layer = weir_layer,
+            outlet_layer = outlet_layer,
+            pumping_station_layer = pumping_station_layer,
             dem = dem,
             minimum_cover_depth = minimum_cover_depth
         )
@@ -557,8 +586,12 @@ class Worker(QThread):
     computation_finished = pyqtSignal(str)
 
     def __init__(self, 
-                 process, 
+                 process,
+                 global_settings_layer,
                  sewerage_layer,
+                 weir_layer,
+                 outlet_layer,
+                 pumping_station_layer,
                  bgt_inlooptabel_fn = None,
                  dem = None,
                  minimum_freeboard= None,
@@ -570,7 +603,11 @@ class Worker(QThread):
         
         super().__init__(parent)
         self.process = process
+        self.global_settings_layer = global_settings_layer
         self.sewerage_layer = sewerage_layer
+        self.weir_layer = weir_layer
+        self.outlet_layer = outlet_layer
+        self.pumping_station_layer = pumping_station_layer
         self.bgt_inlooptabel_fn = bgt_inlooptabel_fn
         self.dem = dem
         self.minimum_freeboard = minimum_freeboard
@@ -608,19 +645,19 @@ class Worker(QThread):
 
             return
 
-        self.progress.emit(25)
+        self.progress_changed.emit(25)
         self.status_changed.emit("Loading BGT Inlooptabel...")
 
         bgt_inlooptabel = BGTInloopTabel(self.bgt_inlooptabel_fn)
 
-        self.progress.emit(50)
+        self.progress_changed.emit(50)
         self.status_changed.emit("Computing connected surfaces...")
 
         for pipe in self.sewerage_network.pipes.values():
             pipe.connected_surface_area = 0.0
             pipe.determine_connected_surface_area(bgt_inlooptabel)
 
-        self.progress.emit(75)
+        self.progress_changed.emit(75)
         self.status_changed.emit("Computing accumulated connected surfaces...")
         self.sewerage_network.accumulate_connected_surface_area()
 
@@ -628,7 +665,7 @@ class Worker(QThread):
             self.sewerage_network, self.sewerage_layer
         )
 
-        self.progress.emit(100)
+        self.progress_changed.emit(100)
 
         if not pipes_with_empty_accumulated_fields:
             message = "The connected surfaces are computed. You can now proceed to compute the diameters."
@@ -648,7 +685,7 @@ class Worker(QThread):
                 message,
             )
 
-        self.progress.emit(0)
+        self.progress_changed.emit(0)
         self.status_changed.emit("")
 
     def compute_diameters(self):
@@ -680,12 +717,12 @@ class Worker(QThread):
 
             return
 
-        self.progress.emit(25)
+        self.progress_changed.emit(25)
         self.status_changed.emit("Sample elevations for network...")
 
         self.sewerage_network.add_elevation_to_network(self.dem)
 
-        self.progress.emit(50)
+        self.progress_changed.emit(50)
         self.status_changed.emit("Computing maximum hydraulic gradients...")
 
         self.sewerage_network.calculate_max_hydraulic_gradient_weirs(
@@ -693,7 +730,7 @@ class Worker(QThread):
         )
         # self.sewerage_network.calculate_max_hydraulic_gradient(waking=minimum_freeboard)
 
-        self.progress.emit(75)
+        self.progress_changed.emit(75)
         self.status_changed.emit("Computing diameters...")
 
         velocity_to_high_pipe_fids = []
@@ -713,7 +750,7 @@ class Worker(QThread):
 
         core_to_layer(self.sewerage_network, self.sewerage_layer)
 
-        self.progress.emit(100)
+        self.progress_changed.emit(100)
 
         if not velocity_to_high_pipe_fids:
             message = "The diameters are computed. You can now proceed to validate/ compute the depths."
@@ -732,7 +769,7 @@ class Worker(QThread):
                 velocity_to_high_pipe_fids, layer_name, fields_of_interest, message
             )
 
-        self.progress.emit(0)
+        self.progress_changed.emit(0)
         self.status_changed.emit("")
 
     def validate_depths(self):
@@ -764,14 +801,14 @@ class Worker(QThread):
 
             return
 
-        self.progress.emit(33)
+        self.progress_changed.emit(33)
         self.status_changed.emit("Sample elevations for network...")
 
         self.sewerage_network.add_elevation_to_network(
             self.dem
         )  # re-do this because user can change the DEM after compute diameters
 
-        self.progress.emit(67)
+        self.progress_changed.emit(67)
         self.status_changed.emit("Calculate cover depths...")
 
         validated = []
@@ -784,7 +821,7 @@ class Worker(QThread):
 
         core_to_layer(self.sewerage_network, self.sewerage_layer)
 
-        self.progress.emit(100)
+        self.progress_changed.emit(100)
 
         if all(validated):
             message = "Valid design! The cover depth of all pipes meet the minimum depth requirement."
@@ -794,24 +831,18 @@ class Worker(QThread):
             message = "Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red."
             self.computation_finished.emit(message)
 
-        self.progress.emit(0)
+        self.progress_changed.emit(0)
         self.status_changed.emit("")
 
     def create_network_from_layers(self):
-        (
-            global_settings_layer,
-            pipe_layer,
-            weir_layer,
-            pumping_station_layer,
-            outlet_layer,
-        ) = self.get_sewerage_designer_layers()
+
         (
             network,
             pipes_in_loop,
             pipes_without_weir,
             fault_network,
         ) = create_sewerage_network(
-            pipe_layer, weir_layer, pumping_station_layer, outlet_layer
+            self.sewerage_layer, self.weir_layer, self.pumping_station_layer, self.outlet_layer
         )
         return network, pipes_in_loop, pipes_without_weir, fault_network
 
