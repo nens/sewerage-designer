@@ -30,7 +30,8 @@ sys.path.append(os.path.dirname(__file__))
 from qgis import processing
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
-from qgis.PyQt.QtCore import QThread, pyqtSignal, QVariant, QApplication
+from qgis.PyQt.QtCore import QThread, pyqtSignal, QVariant
+from qgis.PyQt.QtWidgets import QApplication
 from qgis.core import (
     QgsProject,
     QgsVectorLayer,
