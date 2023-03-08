@@ -98,7 +98,9 @@ def test_compute_cs(SD_db_path, BGT_inlooptabel_path):
     print("network created and validated...")
     
     # I create the BGTInloopTabel class
+    start_t = time.time()
     BGT_inlooptabel = BGTInloopTabel(BGT_inlooptabel_path)
+    print(f"loading BGT inlooptabel took this long: {time.time() - start_t} s")
 
     print("bgt inlooptabel loaded...")
 
@@ -292,6 +294,8 @@ if __name__ == "__main__":
         SD_db_path, BGT_inlooptabel_path
     )
     print(f"elapsed time for STEP 1 = {time.time() - start_time} s")
+
+    '''
     with open('network_after_step_1.pkl', 'wb') as f:
         pickle.dump(network, f)
 
@@ -315,3 +319,4 @@ if __name__ == "__main__":
     print(f"elapsed time for STEP 3 = {time.time() - start_time} s")
     with open('network_after_step_3.pkl', 'wb') as f:
         pickle.dump(network, f)
+    '''

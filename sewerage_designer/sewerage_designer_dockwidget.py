@@ -30,7 +30,7 @@ sys.path.append(os.path.dirname(__file__))
 from qgis import processing
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
-from qgis.PyQt.QtCore import QThread, pyqtSignal, QVariant
+from qgis.PyQt.QtCore import QThread, pyqtSignal, QVariant, QApplication
 from qgis.core import (
     QgsProject,
     QgsVectorLayer,
@@ -39,6 +39,7 @@ from qgis.core import (
     QgsField,
     QgsLineSymbol,
     QgsProperty,
+    QgsLayerTreeLayer
 )
 from qgis.core.additions.edit import edit
 
@@ -134,9 +135,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self, "Info", "<FONT COLOR=" "#ffffff>" f"{message}" "</FONT>"
         )
 
-    def something_went_wrong_message_with_traceback(self, message):
+    def something_went_wrong_message_with_traceback(self, ex):
         box = QtWidgets.QMessageBox()
-        styled_message = "<FONT COLOR=" "#d6d6d6>" f"{message}" "</FONT>"
+        styled_message = "<FONT COLOR=" "#d6d6d6>" f"{ex}" "</FONT>"
+        trace = "\n".join(
+            traceback.format_exception(
+                etype=type(ex), value=ex, tb=ex.__traceback__
+            )
+        )
         response = box.question(
             self,
             "Something went wrong",
@@ -144,7 +150,12 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Help,
             QtWidgets.QMessageBox.Ok,
         )
-        return response
+        if response == QtWidgets.QMessageBox.Help:
+            QtWidgets.QMessageBox.about(
+                self,
+                "Something went wrong",
+                "<FONT COLOR=" "#d6d6d6>" f"{trace}" "</FONT>",
+            )
 
     def add_group(self, group_name):
         root = QgsProject.instance().layerTreeRoot()
@@ -307,61 +318,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         clone.setName(name)
         return clone
 
-
-    def create_layer_of_faulty_cover_depths(self, minimum_cover_depth):
-        layer = self.get_map_layer("sewerage")
-        layer.selectAll()
-        clone = processing.run(
-            "native:saveselectedfeatures", {"INPUT": layer, "OUTPUT": "memory:"}
-        )["OUTPUT"]
-        layer.removeSelection()
-        clone.setName("pipes with unsufficient cover depth")
-        clone.dataProvider().addAttributes(
-            [QgsField("minimum_cover_depth", QVariant.Double)]
-        )
-        clone.dataProvider().addAttributes([QgsField("validated?", QVariant.Bool)])
-        clone.updateFields()
-
-        with edit(clone):
-            field_ids = []
-            fieldnames = set(
-                ["fid", "diameter", "cover_depth", "minimum_cover_depth", "validated?"]
-            )
-            for field in clone.fields():
-                if field.name() not in fieldnames:
-                    field_ids.append(clone.fields().indexFromName(field.name()))
-                if field.name() == "cover_depth":
-                    features = clone.getFeatures()
-                    for feature in features:
-                        cover_depth = feature["cover_depth"]
-                        value = True if minimum_cover_depth < cover_depth else False
-                        if value:
-                            clone.deleteFeature(feature.id())
-                        else:
-                            feature["validated?"] = QVariant(value)
-                            clone.updateFeature(feature)
-                elif field.name() == "minimum_cover_depth":
-                    features = clone.getFeatures()
-                    for feature in features:
-                        feature["minimum_cover_depth"] = minimum_cover_depth
-                        clone.updateFeature(feature)
-
-        clone.dataProvider().deleteAttributes(field_ids)
-        clone.updateFields()
-
-        symbol = QgsLineSymbol.createSimple(
-            {"color": "red", "capstyle": "round", "line_width_unit": "Pixel"}
-        )
-        symbol.setDataDefinedWidth(QgsProperty.fromExpression('"diameter"*9.2'))
-        clone.renderer().setSymbol(symbol)
-        clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
-        clone.triggerRepaint()
-
-        QgsProject.instance().addMapLayer(clone)
-        clone.selectAll()
-        iface.actionZoomToSelected().trigger()
-        clone.removeSelection()
-
     def filepath_create_or_load_geopackage_isChanged(self):
         gpkg = self.get_geopackage_create_or_load_path()
         if gpkg == ".gpkg":
@@ -412,6 +368,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
 
+        self.setEnabled(False)
+
+        QApplication.processEvents()
+
         (
             global_settings_layer,
             sewerage_layer,
@@ -438,25 +398,20 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         )
         self.worker_compute_cs.progress_changed.connect(self.update_progress)
         self.worker_compute_cs.status_changed.connect(self.update_status)
-        self.worker_compute_cs.mistakes_in_input.connect(self.something_went_wrong_message)
         self.worker_compute_cs.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_compute_cs.computation_finished.connect(self.finished_computation_message)
+        self.worker_compute_cs.exception.connect(self.something_went_wrong_message_with_traceback)
 
-        try:
-            self.worker_compute_cs.start()
-        except Exception as ex:
-            trace = "\n".join(
-                traceback.format_exception(
-                    etype=type(ex), value=ex, tb=ex.__traceback__
-                )
-            )
-            message = ex
-            response = self.something_went_wrong_message_with_traceback(message)
-            if response == QtWidgets.QMessageBox.Help:
-                self.traceback_message(trace)
+        self.worker_compute_cs.start()
+
+        self.setEnabled(True)
 
     def pushbutton_computeDiameters_isChecked(self):
         """Compute diameters for the current network and design rainfall event"""
+
+        self.setEnabled(False)
+
+        QApplication.processEvents()
 
         (
             global_settings_layer,
@@ -491,27 +446,22 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         )
         self.worker_compute_diameters.progress_changed.connect(self.update_progress)
         self.worker_compute_diameters.status_changed.connect(self.update_status)
-        self.worker_compute_diameters.mistakes_in_input.connect(self.something_went_wrong_message)
         self.worker_compute_diameters.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_compute_diameters.computation_finished.connect(self.finished_computation_message)
+        self.worker_compute_diameters.exception.connect(self.something_went_wrong_message_with_traceback)
 
-        response = self.check_input()
-        if response == QtWidgets.QMessageBox.Yes:
-            try:
-                self.worker_compute_diameters.start()
-            except Exception as ex:
-                trace = "\n".join(
-                    traceback.format_exception(
-                        etype=type(ex), value=ex, tb=ex.__traceback__
-                    )
-                )
-                message = ex
-                response = self.something_went_wrong_message_with_traceback(message)
-                if response == QtWidgets.QMessageBox.Help:
-                    self.traceback_message(trace)
+        check = self.check_input()
+        if check == QtWidgets.QMessageBox.Yes:
+            self.worker_compute_diameters.start()
+
+        self.setEnabled(True)
 
     def pushbutton_computeDepths_isChecked(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
+
+        self.setEnabled(False)
+
+        QApplication.processEvents()
 
         (
             global_settings_layer,
@@ -540,22 +490,24 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         )
         self.worker_validate_depths.progress_changed.connect(self.update_progress)
         self.worker_validate_depths.status_changed.connect(self.update_status)
-        self.worker_validate_depths.mistakes_in_input.connect(self.something_went_wrong_message)
         self.worker_validate_depths.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_validate_depths.computation_finished.connect(self.finished_computation_message)
+        self.worker_validate_depths.exception.connect(self.something_went_wrong_message_with_traceback)
 
-        try:
-            self.worker_validate_depths.start()
-        except Exception as ex:
-            trace = "\n".join(
-                traceback.format_exception(
-                    etype=type(ex), value=ex, tb=ex.__traceback__
-                )
-            )
-            message = ex
-            response = self.something_went_wrong_message_with_traceback(message)
-            if response == QtWidgets.QMessageBox.Help:
-                self.traceback_message(trace)
+        self.worker_validate_depths.start()
+
+        self.setEnabled(True)
+
+    def disable_plugin(self, boolean: bool):
+
+        self.pushButton_ComputeCS.setDisabled(boolean)
+        self.pushButton_ComputeDiameters.setDisabled(boolean)
+        self.pushButton_ComputeDepths.setDisabled(boolean)
+        self.mMapLayerComboBox_DEM.setDisabled(boolean)
+        self.mMapLayerComboBox_CS.setDisabled(boolean)
+        self.mQgsFileWidget_PathGeopackage.setDisabled(boolean)
+        self.comboBox_DesignRain.setDisabled(boolean)
+        self.lineEdit_PeakIntensity.setDisabled(boolean)
 
     def radiobutton_help_isChecked(self):
         url = r"https://github.com/nens/sewerage-designer/blob/main/20220524%20Gebruikershandleiding%20Sewerage%20Designer.pdf"
@@ -577,13 +529,13 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.closingPlugin.emit()
         event.accept()
 
-class Worker(QThread):
+class Worker(QThread): #TODO change name thread
 
     progress_changed = pyqtSignal(int)
     status_changed = pyqtSignal(str)
-    mistakes_in_input = pyqtSignal(str)
     mistakes_in_network = pyqtSignal(list, str, list, str)
     computation_finished = pyqtSignal(str)
+    exception = pyqtSignal(Exception)
 
     def __init__(self, 
                  process,
@@ -617,6 +569,7 @@ class Worker(QThread):
         
     def compute_cs(self):
 
+        self.progress_changed.emit(0)
         self.status_changed.emit("Creating and validating network...")
         (
             self.sewerage_network,
@@ -685,11 +638,9 @@ class Worker(QThread):
                 message,
             )
 
-        self.progress_changed.emit(0)
-        self.status_changed.emit("")
-
     def compute_diameters(self):
 
+        self.progress_changed.emit(0)
         self.status_changed.emit("Creating and validating network...")
         (
             self.sewerage_network,
@@ -769,11 +720,9 @@ class Worker(QThread):
                 velocity_to_high_pipe_fids, layer_name, fields_of_interest, message
             )
 
-        self.progress_changed.emit(0)
-        self.status_changed.emit("")
-
     def validate_depths(self):
 
+        self.progress_changed.emit(0)
         self.status_changed.emit("Creating and validating network...")
         (
             self.sewerage_network,
@@ -831,9 +780,6 @@ class Worker(QThread):
             message = "Invalid design! The cover depth of some pipes do not meet the minimum depth requirement. These pipes have been colored red."
             self.computation_finished.emit(message)
 
-        self.progress_changed.emit(0)
-        self.status_changed.emit("")
-
     def create_network_from_layers(self):
 
         (
@@ -846,13 +792,78 @@ class Worker(QThread):
         )
         return network, pipes_in_loop, pipes_without_weir, fault_network
 
+    def create_layer_of_faulty_cover_depths(self, minimum_cover_depth):
+
+        layer = self.sewerage_layer
+        layer.selectAll()
+        clone = processing.run(
+            "native:saveselectedfeatures", {"INPUT": layer, "OUTPUT": "memory:"}
+        )["OUTPUT"]
+        layer.removeSelection()
+        clone.setName("pipes with unsufficient cover depth")
+        clone.dataProvider().addAttributes(
+            [QgsField("minimum_cover_depth", QVariant.Double)]
+        )
+        clone.dataProvider().addAttributes([QgsField("validated?", QVariant.Bool)])
+        clone.updateFields()
+
+        with edit(clone):
+            field_ids = []
+            fieldnames = set(
+                ["fid", "diameter", "cover_depth", "minimum_cover_depth", "validated?"]
+            )
+            for field in clone.fields():
+                if field.name() not in fieldnames:
+                    field_ids.append(clone.fields().indexFromName(field.name()))
+                if field.name() == "cover_depth":
+                    features = clone.getFeatures()
+                    for feature in features:
+                        cover_depth = feature["cover_depth"]
+                        value = True if minimum_cover_depth < cover_depth else False
+                        if value:
+                            clone.deleteFeature(feature.id())
+                        else:
+                            feature["validated?"] = QVariant(value)
+                            clone.updateFeature(feature)
+                elif field.name() == "minimum_cover_depth":
+                    features = clone.getFeatures()
+                    for feature in features:
+                        feature["minimum_cover_depth"] = minimum_cover_depth
+                        clone.updateFeature(feature)
+
+        clone.dataProvider().deleteAttributes(field_ids)
+        clone.updateFields()
+
+        symbol = QgsLineSymbol.createSimple(
+            {"color": "red", "capstyle": "round", "line_width_unit": "Pixel"}
+        )
+        symbol.setDataDefinedWidth(QgsProperty.fromExpression('"diameter"*9.2'))
+        clone.renderer().setSymbol(symbol)
+        clone.setBlendMode(QtGui.QPainter.CompositionMode_HardLight)
+        clone.triggerRepaint()
+
+        QgsProject.instance().addMapLayer(clone)
+
+        clone.selectAll()
+        iface.actionZoomToSelected().trigger()
+        clone.removeSelection()
+
     def run(self):
 
-        if self.process == "Compute CS":
-            self.compute_cs()
+        try:
+            if self.process == "Compute CS":
+                self.compute_cs()
 
-        elif self.process == 'Compute Diameters':
-            self.compute_diameters()
+            elif self.process == 'Compute Diameters':
+                self.compute_diameters()
 
-        elif self.process == "Validate Depths":
-            self.validate_depths()
+            elif self.process == "Validate Depths":
+                self.validate_depths()
+
+            self.progress_changed.emit(0)
+            self.status_changed.emit("")
+
+        except Exception as ex:
+            self.exception.emit(ex)
+            self.progress_changed.emit(0)
+            self.status_changed.emit("")
