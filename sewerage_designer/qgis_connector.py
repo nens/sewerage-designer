@@ -284,6 +284,19 @@ def core_to_layer(network, layer):
                         )
                     else:
                         empty_accumulated_fields.append(feature_fid)
+            elif field == "accumulated_volume":
+                features = get_features(layer)
+                for feature in features:
+                    feature_fid = feature["fid"]
+                    feature_update = feature["update"]
+                    pipe = network.pipes[feature_fid]
+                    if pipe.accumulated_volume is not None and feature_update:
+                        update_field(
+                            layer,
+                            feature,
+                            field,
+                            round(float(pipe.accumulated_volume), 5),
+                        )
             elif field == "max_hydraulic_gradient":
                 features = get_features(layer)
                 for feature in features:

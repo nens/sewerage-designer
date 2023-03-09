@@ -31,7 +31,6 @@ from qgis import processing
 from qgis.utils import iface
 from qgis.PyQt import QtGui, QtWidgets, uic
 from qgis.PyQt.QtCore import QThread, pyqtSignal, QVariant
-from qgis.PyQt.QtWidgets import QApplication
 from qgis.core import (
     QgsProject,
     QgsVectorLayer,
@@ -85,7 +84,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
         self.mMapLayerComboBox_CS.setShowCrs(True)
         self.mMapLayerComboBox_CS.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        self.pushButton_ComputeCS.clicked.connect(self.pushbutton_computeCS_isChecked)
         for key in AREA_WIDE_RAIN:
             self.comboBox_DesignRain.addItem(key)
         self.lineEdit_PeakIntensity.setText(
@@ -94,15 +92,22 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.comboBox_DesignRain.currentTextChanged.connect(
             self.write_peak_intensity
         )  # change intensity if users changes design event
-        self.pushButton_ComputeDiameters.clicked.connect(
-            self.pushbutton_computeDiameters_isChecked
-        )
-        self.pushButton_ComputeDepths.clicked.connect(
-            self.pushbutton_computeDepths_isChecked
-        )
-        self.radioButton_Help.clicked.connect(
-            self.radiobutton_help_isChecked
-        )        
+
+        self.pushButton_ComputeCS.clicked.connect(self.pushbutton_computeCS_isChecked)
+        self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)
+        self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
+
+        #clicker the click, connect to the clicker the click function
+        #self.connect_button_clicked(self.pushButton_ComputeCS, self.pushbutton_computeCS_isChecked)
+        #self.connect_button_clicked(self.pushButton_ComputeDiameters, self.pushbutton_computeDiameters_isChecked)
+        #self.connect_button_clicked(self.pushButton_ComputeDepths, self.pushbutton_computeDepths_isChecked)
+
+        self.radioButton_Help.clicked.connect(self.radiobutton_help_isChecked)
+
+    def connect_button_clicked(self, button, slot):
+        button.clicked.connect(lambda: self.enable_plugin(False))
+        button.clicked.connect(slot)
+        button.clicked.connect(lambda: self.enable_plugin(True))
 
     def update_progress(self, value):
         # Update the progress bar
@@ -208,10 +213,10 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def get_peak_intensity_design_event(self, AREA_WIDE_RAIN):
         event = self.comboBox_DesignRain.currentText()
         peak_intensity = round(max(AREA_WIDE_RAIN[event]) * 12, 1)
-        return peak_intensity
+        return event, peak_intensity
 
     def write_peak_intensity(self):
-        peak_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        event, peak_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
         self.lineEdit_PeakIntensity.setText(str(peak_intensity))
 
     def get_final_peak_intensity_from_lineedit(self):
@@ -223,22 +228,14 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         with open(source, "rb") as src, open(dest, "wb") as dst:
             dst.write(src.read())
 
-    def get_list_of_sewerage_designer_layers(self):
-        (
-            global_settings_layer,
-            pipe_layer,
-            weir_layer,
-            pumping_station_layer,
-            outlet_layer,
-        ) = self.get_sewerage_designer_layers()
-        list_of_layers = [pipe_layer, weir_layer, pumping_station_layer, outlet_layer]
-        return list_of_layers
-
     def check_input(self):
         response = QtWidgets.QMessageBox.Yes  # by definition if not changed
         intensity = self.get_final_peak_intensity_from_lineedit()
-        check_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        event, check_intensity = self.get_peak_intensity_design_event(AREA_WIDE_RAIN)
+        rain_sum = round(sum(AREA_WIDE_RAIN[event]), 1)
         if not intensity == check_intensity:
+            altered_event = [intensity if x == max(AREA_WIDE_RAIN[event]) else x for x in AREA_WIDE_RAIN[event]]
+            rain_sum = round(sum(altered_event), 1)
             box = QtWidgets.QMessageBox()
             message = (
                 "Peak intensity "
@@ -254,7 +251,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 QtWidgets.QMessageBox.Cancel,
             )
 
-        return response
+        return response, rain_sum
 
     def mistakes_in_network_error(
         self, pipe_fids, layer_name, fields_of_interest, message
@@ -303,12 +300,16 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         for feature in layer.getFeatures():
             values.append(float(feature[field]))
         if not values:
-            raise ValueError("Global settings layer is empty. Please define settings.")
+            message = "Global settings layer is empty. Please define settings."
+            self.something_went_wrong_message(message)
+            raise ValueError(message)
         if len(values) == 1:
             return values[0]
-        else:
-            raise ValueError("Multiple settings have been defined in the global settings layer. "
-                             "Please fill in only once.")
+        if len(values) > 1:
+            message = "Multiple settings have been defined in the global settings layer. "\
+                             "Please fill in only once."
+            self.something_went_wrong_message(message)
+            raise ValueError(message)
 
     def make_clone(self, layer, features_to_be_cloned, name):
         layer.select(features_to_be_cloned)
@@ -369,10 +370,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """Create a pipe network and calculate the connected surfaces
         Write back to QGIS layers"""
 
-        self.setEnabled(False)
-
-        QApplication.processEvents()
-
         (
             global_settings_layer,
             sewerage_layer,
@@ -405,14 +402,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.worker_compute_cs.start()
 
-        self.setEnabled(True)
-
     def pushbutton_computeDiameters_isChecked(self):
         """Compute diameters for the current network and design rainfall event"""
-
-        self.setEnabled(False)
-
-        QApplication.processEvents()
 
         (
             global_settings_layer,
@@ -433,6 +424,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         )
         peak_intensity = self.get_final_peak_intensity_from_lineedit()
 
+        check, rain_sum = self.check_input()
+
         self.worker_compute_diameters = Worker(
             process = "Compute Diameters",
             global_settings_layer = global_settings_layer,
@@ -443,7 +436,8 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             dem = dem,
             minimum_freeboard = minimum_freeboard,
             vmax = vmax,
-            peak_intensity = peak_intensity
+            peak_intensity = peak_intensity,
+            rain_sum = rain_sum,
         )
         self.worker_compute_diameters.progress_changed.connect(self.update_progress)
         self.worker_compute_diameters.status_changed.connect(self.update_status)
@@ -451,18 +445,11 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.worker_compute_diameters.computation_finished.connect(self.finished_computation_message)
         self.worker_compute_diameters.exception.connect(self.something_went_wrong_message_with_traceback)
 
-        check = self.check_input()
         if check == QtWidgets.QMessageBox.Yes:
             self.worker_compute_diameters.start()
 
-        self.setEnabled(True)
-
     def pushbutton_computeDepths_isChecked(self):
         """Check if the computed depths fit the criteria of the minimum cover depth"""
-
-        self.setEnabled(False)
-
-        QApplication.processEvents()
 
         (
             global_settings_layer,
@@ -497,18 +484,16 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.worker_validate_depths.start()
 
-        self.setEnabled(True)
+    def enable_plugin(self, boolean: bool):
 
-    def disable_plugin(self, boolean: bool):
-
-        self.pushButton_ComputeCS.setDisabled(boolean)
-        self.pushButton_ComputeDiameters.setDisabled(boolean)
-        self.pushButton_ComputeDepths.setDisabled(boolean)
-        self.mMapLayerComboBox_DEM.setDisabled(boolean)
-        self.mMapLayerComboBox_CS.setDisabled(boolean)
-        self.mQgsFileWidget_PathGeopackage.setDisabled(boolean)
-        self.comboBox_DesignRain.setDisabled(boolean)
-        self.lineEdit_PeakIntensity.setDisabled(boolean)
+        self.pushButton_ComputeCS.setEnabled(boolean)
+        self.pushButton_ComputeDiameters.setEnabled(boolean)
+        self.pushButton_ComputeDepths.setEnabled(boolean)
+        self.mMapLayerComboBox_DEM.setEnabled(boolean)
+        self.mMapLayerComboBox_CS.setEnabled(boolean)
+        self.mQgsFileWidget_PathGeopackage.setEnabled(boolean)
+        self.comboBox_DesignRain.setEnabled(boolean)
+        self.lineEdit_PeakIntensity.setEnabled(boolean)
 
     def radiobutton_help_isChecked(self):
         url = r"https://github.com/nens/sewerage-designer/blob/main/20220524%20Gebruikershandleiding%20Sewerage%20Designer.pdf"
@@ -550,6 +535,7 @@ class Worker(QThread): #TODO change name thread
                  minimum_freeboard= None,
                  vmax = None,
                  peak_intensity = None,
+                 rain_sum = None,
                  minimum_cover_depth = None,
                  parent = None
                  ):
@@ -566,6 +552,7 @@ class Worker(QThread): #TODO change name thread
         self.minimum_freeboard = minimum_freeboard
         self.vmax = vmax
         self.peak_intensity = peak_intensity
+        self.rain_sum = rain_sum
         self.minimum_cover_depth = minimum_cover_depth
         
     def compute_cs(self):
@@ -688,6 +675,7 @@ class Worker(QThread): #TODO change name thread
         velocity_to_high_pipe_fids = []
         for pipe_id, pipe in self.sewerage_network.pipes.items():
             pipe.calculate_discharge(intensity=self.peak_intensity)
+            pipe.calculate_volume(rain_sum=self.rain_sum)
             try:
                 pipe.calculate_diameter(self.vmax)
             except Exception as e:
