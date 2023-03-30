@@ -699,7 +699,7 @@ class Worker(QThread): #TODO change name thread
         velocity_to_high_pipe_fids = []
         for pipe_id, pipe in self.sewerage_network.pipes.items():
             pipe.calculate_discharge(intensity=self.peak_intensity)
-            pipe.calculate_volume(rain_sum=self.rain_sum)
+            #pipe.calculate_volume(rain_sum=self.rain_sum)
             try:
                 pipe.calculate_diameter(self.vmax)
             except Exception as e:

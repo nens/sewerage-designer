@@ -316,7 +316,7 @@ class Pipe:
         material: str = None,
         connected_surface_area: float = 0.0,
         accumulated_connected_surface_area: float = None,
-        accumulated_volume: float = None,
+        #accumulated_volume: float = None,
         max_hydraulic_gradient: float = None,
         sewerage_type: str = None,
         cover_depth: float = None,
@@ -331,7 +331,7 @@ class Pipe:
         self.material = material
         self.connected_surface_area = connected_surface_area
         self.accumulated_connected_surface_area = accumulated_connected_surface_area
-        self.accumulated_volume = accumulated_volume
+        #self.accumulated_volume = accumulated_volume
         self.sewerage_type = sewerage_type
         self.cover_depth = cover_depth
         self.discharge = discharge
@@ -427,6 +427,7 @@ class Pipe:
         )
         self.connected_surface_area = connected_surface_area
 
+    '''
     def calculate_volume(self, rain_sum):
         """calculate sum per rain event from constants.
         if peak intensity is not equal to that of the event
@@ -437,6 +438,7 @@ class Pipe:
             rain_sum / 1000
         )
         self.accumulated_volume = pipe_accumulated_volume
+    '''
 
     def calculate_discharge(self, intensity):
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
