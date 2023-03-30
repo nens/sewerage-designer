@@ -39,7 +39,7 @@ from qgis.core import (
     QgsField,
     QgsLineSymbol,
     QgsProperty,
-    QgsLayerTreeLayer
+    QgsLayerTreeLayer,
 )
 from qgis.core.additions.edit import edit
 
@@ -97,7 +97,6 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.pushButton_ComputeDiameters.clicked.connect(self.pushbutton_computeDiameters_isChecked)
         self.pushButton_ComputeDepths.clicked.connect(self.pushbutton_computeDepths_isChecked)
 
-        #clicker the click, connect to the clicker the click function
         #self.connect_button_clicked(self.pushButton_ComputeCS, self.pushbutton_computeCS_isChecked)
         #self.connect_button_clicked(self.pushButton_ComputeDiameters, self.pushbutton_computeDiameters_isChecked)
         #self.connect_button_clicked(self.pushButton_ComputeDepths, self.pushbutton_computeDepths_isChecked)
@@ -105,9 +104,9 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.radioButton_Help.clicked.connect(self.radiobutton_help_isChecked)
 
     def connect_button_clicked(self, button, slot):
-        button.clicked.connect(lambda: self.enable_plugin(False))
+        #disable panel and run [not used]
+        #button.clicked.connect(lambda: self.enable_plugin(disable = True))
         button.clicked.connect(slot)
-        button.clicked.connect(lambda: self.enable_plugin(True))
 
     def update_progress(self, value):
         # Update the progress bar
@@ -399,6 +398,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.worker_compute_cs.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_compute_cs.computation_finished.connect(self.finished_computation_message)
         self.worker_compute_cs.exception.connect(self.something_went_wrong_message_with_traceback)
+        self.worker_compute_cs.enable_plugin.connect(self.enable_plugin)
 
         self.worker_compute_cs.start()
 
@@ -444,6 +444,7 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.worker_compute_diameters.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_compute_diameters.computation_finished.connect(self.finished_computation_message)
         self.worker_compute_diameters.exception.connect(self.something_went_wrong_message_with_traceback)
+        self.worker_compute_diameters.enable_plugin.connect(self.enable_plugin)
 
         if check == QtWidgets.QMessageBox.Yes:
             self.worker_compute_diameters.start()
@@ -481,19 +482,41 @@ class SewerageDesignerDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.worker_validate_depths.mistakes_in_network.connect(self.mistakes_in_network_error)
         self.worker_validate_depths.computation_finished.connect(self.finished_computation_message)
         self.worker_validate_depths.exception.connect(self.something_went_wrong_message_with_traceback)
+        self.worker_validate_depths.enable_plugin.connect(self.enable_plugin)
 
         self.worker_validate_depths.start()
 
-    def enable_plugin(self, boolean: bool):
+    def enable_plugin(self, integer):
 
-        self.pushButton_ComputeCS.setEnabled(boolean)
-        self.pushButton_ComputeDiameters.setEnabled(boolean)
-        self.pushButton_ComputeDepths.setEnabled(boolean)
-        self.mMapLayerComboBox_DEM.setEnabled(boolean)
-        self.mMapLayerComboBox_CS.setEnabled(boolean)
-        self.mQgsFileWidget_PathGeopackage.setEnabled(boolean)
-        self.comboBox_DesignRain.setEnabled(boolean)
-        self.lineEdit_PeakIntensity.setEnabled(boolean)
+        buttons = [
+            self.pushButton_ComputeCS,
+            self.pushButton_ComputeDiameters,
+            self.pushButton_ComputeDepths,
+            self.mMapLayerComboBox_DEM,
+            self.mMapLayerComboBox_CS,
+            self.mQgsFileWidget_PathGeopackage,
+            self.comboBox_DesignRain,
+            self.lineEdit_PeakIntensity
+        ]
+
+        if integer == 1:
+            # we enable
+            for button in buttons:
+                button.setEnabled(True)
+                while not button.isEnabled():
+                    # we keep pushing the process as long as button is still disabled before we continue
+                    QtWidgets.QApplication.processEvents()
+
+        elif integer == 0:
+            # we disable
+            for button in buttons:
+                button.setEnabled(False)
+                while button.isEnabled():
+                    # we keep pushing the process as long as button is still enabled before we continue
+                    QtWidgets.QApplication.processEvents()
+
+        else:
+            raise ValueError(f"Signal {integer} not recognised, should be in [0, 1]")
 
     def radiobutton_help_isChecked(self):
         url = r"https://github.com/nens/sewerage-designer/blob/main/20220524%20Gebruikershandleiding%20Sewerage%20Designer.pdf"
@@ -522,6 +545,7 @@ class Worker(QThread): #TODO change name thread
     mistakes_in_network = pyqtSignal(list, str, list, str)
     computation_finished = pyqtSignal(str)
     exception = pyqtSignal(Exception)
+    enable_plugin = pyqtSignal(int)
 
     def __init__(self, 
                  process,
@@ -839,6 +863,8 @@ class Worker(QThread): #TODO change name thread
 
     def run(self):
 
+        self.enable_plugin.emit(0)
+
         try:
             if self.process == "Compute CS":
                 self.compute_cs()
@@ -851,8 +877,10 @@ class Worker(QThread): #TODO change name thread
 
             self.progress_changed.emit(0)
             self.status_changed.emit("")
+            self.enable_plugin.emit(1)
 
         except Exception as ex:
             self.exception.emit(ex)
             self.progress_changed.emit(0)
             self.status_changed.emit("")
+            self.enable_plugin.emit(1)
