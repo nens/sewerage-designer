@@ -16,7 +16,7 @@ about=Input:
 	 - sewer system geometry including diameters and depths (gpkg)
 
 	For detailed information please check the manual. Click 'Open manual' in the plug-in.
-version=1.0.1
+version=1.0.2
 author=Nelen & Schuurmans
 email=info@nelen-schuurmans.nl
 tracker=https://github.com/nens/sewerage-designer/issues
