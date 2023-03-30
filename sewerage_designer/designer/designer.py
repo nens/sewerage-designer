@@ -9,7 +9,6 @@ Created on Wed Dec  8 14:49:31 2021
 # @Leendert
 # TODO seems too much code for one script
 # TODO the hydraulic gradient computation seems rushed, chaotic and maybe even unfinished
-# TODO mistake in calculate_cover_depth: subgraphs created without edges
 # TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
 
 # First-party imports
@@ -178,13 +177,14 @@ class BGTInloopTabel:
                 "BGT Inlooptabel not found: {}".format(tabel_abspath)
             )
         tabel_ds = ogr.Open(tabel_abspath)
-        # TODO more thorough checks of validity of input geopackage
+        if tabel_ds is None:
+            raise ValueError("Could not open BGT Inlooptabel: {}".format(tabel_abspath))
         try:
             self.layer = tabel_ds.GetLayer(0)
         except Exception:
             raise ValueError("Not a valid file, {}".format(tabel_abspath))
 
-        self.fields = self.get_layer_fields()
+        self.fields = list(self.get_layer_fields())
         for field in BGT_INLOOPTABEL_REQUIRED_FIELDS:
             if field not in self.fields:
                 raise ValueError(
@@ -197,13 +197,8 @@ class BGTInloopTabel:
 
     def get_layer_fields(self):
         """Sets the layers fields"""
-        fields = []
         ldefn = self.layer.GetLayerDefn()
-        for n in range(ldefn.GetFieldCount()):
-            fdefn = ldefn.GetFieldDefn(n)
-            fields.append(fdefn.name)
-
-        return fields
+        return (ldefn.GetFieldDefn(n).name for n in range(ldefn.GetFieldCount()))
 
     def set_table(self):
         """Sets the table if not exists"""
@@ -211,28 +206,25 @@ class BGTInloopTabel:
             self.table_fields = self.fields + ["fid", "surface_area"]
             self._table = {field: [] for field in self.table_fields}
 
+            self.layer.ResetReading()
             for feature in self.layer:
-                feature_items = json.loads(feature.ExportToJson())["properties"]
+                feature_items = feature.items()
                 feature_geometry = feature.GetGeometryRef()
                 for key, value in feature_items.items():
-                    self._table[key].append(value)
+                    if key in self._table:
+                        self._table[key].append(value)
                 self._table["fid"].append(feature.GetFID())
                 self._table["surface_area"].append(feature_geometry.GetArea())
 
     def get_surface_area_for_pipe_code(self, pipe_code, pipe_type):
         """Get the connected surface area for a pipe code and which type of sewerage system should be searched"""
-        pipe_type_codes = self._table["pipe_code_" + pipe_type]
-        surface_areas = []
-        for i, code in enumerate(pipe_type_codes):
-            if str(code) == str(pipe_code):
-                surface_area_bgt = self._table["surface_area"][i]
-                surface_fraction = self._table[pipe_type][i] / 100
-                connected_area = surface_area_bgt * surface_fraction
-
-                surface_areas.append(connected_area)
-
-        surface_sum = sum(surface_areas)
-        return surface_sum
+        pipe_type_codes = self._table[f"pipe_code_{pipe_type}"]
+        surface_areas = [
+            self._table["surface_area"][i] * (self._table[pipe_type][i] / 100)
+            for i, code in enumerate(pipe_type_codes)
+            if str(code) == str(pipe_code)
+        ]
+        return sum(surface_areas)
 
 
 class Weir:
@@ -324,6 +316,7 @@ class Pipe:
         material: str = None,
         connected_surface_area: float = 0.0,
         accumulated_connected_surface_area: float = None,
+        accumulated_volume: float = None,
         max_hydraulic_gradient: float = None,
         sewerage_type: str = None,
         cover_depth: float = None,
@@ -338,6 +331,7 @@ class Pipe:
         self.material = material
         self.connected_surface_area = connected_surface_area
         self.accumulated_connected_surface_area = accumulated_connected_surface_area
+        self.accumulated_volume = accumulated_volume
         self.sewerage_type = sewerage_type
         self.cover_depth = cover_depth
         self.discharge = discharge
@@ -432,6 +426,17 @@ class Pipe:
             pipe_code=str(self.fid), pipe_type=self.sewerage_type
         )
         self.connected_surface_area = connected_surface_area
+
+    def calculate_volume(self, rain_sum):
+        """calculate sum per rain event from constants.
+        if peak intensity is not equal to that of the event
+            change current max of that rain event to the peak intensity set,
+            don’t change other values in rain event"""
+
+        pipe_accumulated_volume = self.accumulated_connected_surface_area * (
+            rain_sum / 1000
+        )
+        self.accumulated_volume = pipe_accumulated_volume
 
     def calculate_discharge(self, intensity):
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""

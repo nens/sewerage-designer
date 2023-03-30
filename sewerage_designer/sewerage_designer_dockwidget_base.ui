@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>446</width>
+    <width>516</width>
     <height>903</height>
    </rect>
   </property>
@@ -29,7 +29,7 @@
   </property>
   <widget class="QWidget" name="dockWidgetContents">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="1">
+    <item row="0" column="0">
      <widget class="QScrollArea" name="scrollArea">
       <property name="styleSheet">
        <string notr="true"/>
@@ -51,11 +51,79 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>424</width>
-         <height>857</height>
+         <width>494</width>
+         <height>855</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <widget class="QProgressBar" name="QProgressBar">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QProgressBar {
+    border: 1px solid rgb(170, 255, 255);
+    border-radius: 1px;
+    text-align: center;
+    background: transparent;
+}
+
+QProgressBar::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(140, 255, 230, 100), stop:1 rgb(170, 255, 255));
+    width: 5px;
+    margin: 0.5px;
+    animation: glistening 2s ease-in-out infinite;
+}
+
+@keyframes glistening {
+    0% {
+        background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F82, stop:1 #FFF);
+    }
+    50% {
+        background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FFF, stop:1 #F82);
+    }
+    100% {
+        background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F82, stop:1 #FFF);
+    }
+}</string>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="value">
+           <number>50</number>
+          </property>
+          <property name="textVisible">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="QLabel_ProgressBar">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="acceptDrops">
+           <bool>false</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">color: rgb(170, 255, 255);</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
         <item alignment="Qt::AlignHCenter">
          <widget class="QGroupBox" name="horizontalGroupBox">
           <property name="sizePolicy">
@@ -137,7 +205,10 @@
               <cursorShape>IBeamCursor</cursorShape>
              </property>
              <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
+              <string notr="true">:enabled { background-color: rgba(140, 255, 230, 100); cursor: pointer;}
+:hover { background-color: rgba(170, 255, 230, 100); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; }
+:pressed { background-color: rgba(200, 255, 230, 100); }</string>
              </property>
             </widget>
            </item>
@@ -187,7 +258,10 @@
            <item>
             <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_DEM">
              <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
+              <string notr="true">:enabled { background-color: rgba(140, 255, 230, 100); cursor: pointer;}
+:hover { background-color: rgba(170, 255, 230, 100); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; }
+:pressed { background-color: rgba(200, 255, 230, 100); }</string>
              </property>
             </widget>
            </item>
@@ -241,14 +315,21 @@
            <item>
             <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_CS">
              <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
+              <string notr="true">:enabled { background-color: rgba(140, 255, 230, 100); cursor: pointer;}
+:hover { background-color: rgba(170, 255, 230, 100); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; }
+:pressed { background-color: rgba(200, 255, 230, 100); }</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_ComputeCS">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(170, 255, 255);;color: rgb(0, 0, 0);</string>
+              <string notr="true">:enabled { background-color: rgb(170, 255, 255); color: rgb(0, 0, 0); cursor: pointer; }
+:hover { background-color: rgb(128, 191, 191); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; color: #666666; }
+:pressed { background-color: rgb(85, 128, 128); border-style: inset; }
+:checked { background-color: rgb(255, 192, 192); }</string>
              </property>
              <property name="text">
               <string>Compute connected surfaces</string>
@@ -304,7 +385,10 @@
            <item>
             <widget class="QComboBox" name="comboBox_DesignRain">
              <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
+              <string notr="true">:enabled { background-color: rgba(140, 255, 230, 100); cursor: pointer;}
+:hover { background-color: rgba(170, 255, 230, 100); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; }
+:pressed { background-color: rgba(200, 255, 230, 100); }</string>
              </property>
             </widget>
            </item>
@@ -327,14 +411,21 @@
            <item>
             <widget class="QLineEdit" name="lineEdit_PeakIntensity">
              <property name="styleSheet">
-              <string notr="true">background-color: rgba(140, 255, 230, 100);</string>
+              <string notr="true">:enabled { background-color: rgba(140, 255, 230, 100); cursor: pointer;}
+:hover { background-color: rgba(170, 255, 230, 100); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; }
+:pressed { background-color: rgba(200, 255, 230, 100); }</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_ComputeDiameters">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(170, 255, 255);;color: rgb(0, 0, 0);</string>
+              <string notr="true">:enabled { background-color: rgb(170, 255, 255); color: rgb(0, 0, 0); cursor: pointer; }
+:hover { background-color: rgb(128, 191, 191); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; color: #666666; }
+:pressed { background-color: rgb(85, 128, 128); border-style: inset; }
+:checked { background-color: rgb(255, 192, 192); }</string>
              </property>
              <property name="text">
               <string>Compute diameters</string>
@@ -368,7 +459,11 @@
            <item>
             <widget class="QPushButton" name="pushButton_ComputeDepths">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(170, 255, 255);;color: rgb(0, 0, 0);</string>
+              <string notr="true">:enabled { background-color: rgb(170, 255, 255); color: rgb(0, 0, 0); cursor: pointer; }
+:hover { background-color: rgb(128, 191, 191); }
+:disabled { background-color: rgba(138,146,156,255); cursor: not-allowed; color: #666666; }
+:pressed { background-color: rgb(85, 128, 128); border-style: inset; }
+:checked { background-color: rgb(255, 192, 192); }</string>
              </property>
              <property name="text">
               <string>Validate depths</string>
