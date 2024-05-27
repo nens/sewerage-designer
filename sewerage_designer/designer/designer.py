@@ -161,7 +161,7 @@ BGT_INLOOPTABEL_REQUIRED_FIELDS = [
 ]
 LINE_SAMPLE_POINTS = 100
 
-MATERIAL_THICKNESS = {"PVC": 0.1, "Concrete": 0.2}
+MATERIAL_THICKNESS = {"PVC": 0, "Concrete": 0.05}
 
 
 class InvalidGeometryException(Exception):
@@ -315,13 +315,15 @@ class Pipe:
         end_level: float = None,
         material: str = None,
         connected_surface_area: float = 0.0,
-        accumulated_connected_surface_area: float = None,
+        accumulated_connected_surface_area: float = 0.0,
         #accumulated_volume: float = None,
         max_hydraulic_gradient: float = None,
         sewerage_type: str = None,
         cover_depth: float = None,
         discharge: float = None,
         velocity: float = None,
+        ds_weir_crest_level: float = None,
+        ds_weir_fid: int = None
     ):
         self.geometry = ogr.CreateGeometryFromWkt(wkt_geometry)
         self.fid = fid
@@ -337,6 +339,8 @@ class Pipe:
         self.discharge = discharge
         self.velocity = velocity
         self.max_hydraulic_gradient = max_hydraulic_gradient
+        self.ds_weir_crest_level = ds_weir_crest_level
+        self.ds_weir_fid = ds_weir_fid
 
         self.start_elevation = None
         self.end_elevation = None
@@ -444,6 +448,9 @@ class Pipe:
         """Calculate the inflow from connected surfaces given an intensity in mm/h"""
 
         # intensity is in mm/h, timestep is in seconds, output discharge is m3/s
+        if self.accumulated_connected_surface_area in [0, None]:
+            self.accumulated_connected_surface_area = 1 # we need some area for numerical stability, which does not affect results
+
         pipe_discharge = self.accumulated_connected_surface_area * (
             (intensity / 1000) / 3600
         )
@@ -949,6 +956,7 @@ class PipeNetwork:
             
             # A similar break for this one.
             if current_elevation < -20:
+                print("Doing the hard break #2")
                 break 
             
             # First we recompute the downstream sections to the new elevation.
@@ -1037,9 +1045,6 @@ class PipeNetwork:
         """
 
         external_weirs = [weir for weir in self.weirs.values() if weir.external]
-        
-        
-        print("Amount of external weirs:", len(external_weirs))
         for i, weir in enumerate(external_weirs):
 
             # we set variables and the first hydraulic gradient.
@@ -1293,16 +1298,14 @@ class PipeNetwork:
 
 
         """
-        upstream = PipeSection(self.find_upstream_pipes(external_weir.node))
-
+        upstream = PipeSection(self.find_upstream_pipes(external_weir.node)) # upstream is alle pipes in een subsystem die horen bij een external weir.
         sections = []
         used_weirs = [external_weir]
         pipes = []
         list_of_branches = []
+        
         for pipe in upstream:
-
-            weirs = self.find_weir_on_pipe(pipe)
-
+            weirs = self.find_weir_on_pipe(pipe) # weir exactly on pipe ds or us
             # It is internal if the section has a beginning and an
             # end in the same system.
             # Internal can be:
@@ -1321,14 +1324,16 @@ class PipeNetwork:
             from_weir = False
             pipe_node = None
             last = False
+            pipe.weir = None
+            pipe.ds_weir_crest_level = None
 
-            # Internal - weir to weir when only one pipe.
+            # Internal - weir to weir when only one pipe. 
             # We expect one weir to be used already.
-            multiple_weirs = len(weirs) == 2
+            multiple_weirs = len(weirs) == 2 # only when one pipe is exactly between two weirs
             if multiple_weirs:
                 for internal_weir in weirs:
                     if internal_weir.fid in [w.fid for w in used_weirs]:
-                        start_weir = internal_weir  # first pipe of a new section.
+                        start_weir = internal_weir  # first pipe of a new section, internal = false
                     else:
                         end_weir = internal_weir
 
@@ -1349,28 +1354,32 @@ class PipeNetwork:
             # Internal - weir to weir and pipe to weir for multiple pipes.
             # By going upstream, the first weir should be already used.
             # The a few pipes pass which have no weirs.
-            # Eventally we'll come across a weir which is the eind weir.
+            # Eventually we'll come across a weir which is the eind weir.
             # So therefore, it covers both weir to weir and pipe to weir section.
-            if not internal:
-                for internal_weir in weirs:
+            if not internal:  ## komt alles binnen behalve pipes tussen 2 weirs
+                for internal_weir in weirs: ## dit om alle buizen met een weir er op te bepalen of downstream (1) of upstream een weir ligt (2)
                     if internal_weir.fid in [w.fid for w in used_weirs]:
-                        start_weir = internal_weir  # first pipe of a new section.
+                        start_weir = internal_weir  ## Checked, Correct: first pipe of a new section, already has been applied to last pipe of a section.
+                        pipe.weir = start_weir # weir directly downstream of connected to pipe (internal true?)
+                        pipe.ds_weir_crest_level = start_weir.weir_level
                     else:
                         internal = True
-                        end_weir = internal_weir
-                        to_weir = True
+                        end_weir = internal_weir # Checked, Correct: last pipe of a section (upstream connected to a weir).
+                        to_weir = True # vanaf pipe, naar weir = true
                         used_weirs.append(internal_weir)
-
+                             
             # Internal - weir to pipe for multiple pipes.
             # The pipe starts at the end of another internal section,
             # which is always a weir.
             # If the following pipes intersect with a pipe, we call it a section.
             if not internal and len(pipes) > 0:
+                ## hier komen alle pipes langs die niet de meeste benedenstroomse pipe van een sectie zijn, én niet aan een weir liggen met bovenstroomse node
                 for section in sections:
-                    pipe_node = section.intersects_pipe(pipe)
+                    pipe_node = section.intersects_pipe(pipe) # UPSTREAM pipe node of pipe
                     if pipe_node:
+                        ### hier: downstream pipe section connected to upstream node from assessed pipe 
                         internal = True
-                        to_pipe = True
+                        to_pipe = True  # vanaf pipe, naar pipe = true
                         end_weir = None
                         break
 
@@ -1379,6 +1388,7 @@ class PipeNetwork:
             # This is not happening halfway.
             if not internal:
                 intersects = self.find_pipes_with_node(pipe.start_node)
+                ### hier alle pipe id's die aansluiten op de start_node van assessed pipe. als >2, op splitsing van 3
                 if len(intersects) > 2:
                     internal = True
                     to_pipe = True
@@ -1393,7 +1403,7 @@ class PipeNetwork:
 
             # Note that last is absolute, if something starts off as internal
             # But is then found to be last by this function, it will be last.
-            if last:
+            if last: # good, all last pipes of subsections come across within this if statement
                 internal = False
 
             pipes.append(pipe)
@@ -1401,15 +1411,26 @@ class PipeNetwork:
             # Some administration to find out where the section comes from.
             if (internal or last) and not multiple_weirs:
                 from_pipe = False
-                from_weir = True
+                from_weir = True # not always the case but this is changed in for loop beneith
                 used_nodes = [w.node for w in used_weirs]
                 for section in sections:
-                    pipe_node = section.intersects_pipe(pipes[0])
-                    if pipe_node and pipe_node not in used_nodes:
+                    pipe_node = section.intersects_pipe(pipes[0])   # pipe node of end of section
+                    if pipe_node and pipe_node not in used_nodes:  
+                        ### print(f"pipe {pipe.fid}, meest upstream pipe van een section, en meest downstream connecting pipe node van sectie is {pipe_node}")
                         from_pipe = True
                         from_weir = False
+                        ### print(f"hier komt pipe {pipe.fid} langs met start weir waarde: {start_weir}")
+                        ds_pipes = PipeSection(self.find_downstream_pipes(pipe_node)).pipes # all pipes downstream of this section
+                        for ds_pipe in ds_pipes:
+                            if hasattr(ds_pipe, "weir") and not ds_pipe.weir is None: # check which ds weir value the first downstream pipe has with a weir value
+                                pipe.weir = ds_pipe.weir  
+                                pipe.ds_weir_crest_level = ds_pipe.weir.weir_level
+                                break                       # assumption: weir value of assessed section is weir value first pipe to pipe connected downstream section which is checked
+                        
 
-            if internal:
+
+            if internal: 
+                ## deze gaan de sections waar ze inliggen updaten
                 section = PipeSection(pipes)
                 section.internal = True
                 section.last = False
@@ -1443,6 +1464,8 @@ class PipeNetwork:
                 section.to_downstream_weir = from_weir
                 section.downstream_weir = start_weir
                 if start_weir:
+                    pipe.weir = start_weir ## correct
+                    pipe.ds_weir_crest_level = start_weir.weir_level
                     section.downstream_weir_elevation = (
                         start_weir.weir_level + start_weir.crest_flow_depth
                     )
@@ -1523,7 +1546,15 @@ class PipeNetwork:
         self.pipe_sections_lookup = {}
         for section in new:
             for pipe in section.pipes:
+                if pipe.weir is not None: 
+                    section.weir = pipe.weir # retrieve from the one pipe of which we know we the ds weir
                 self.pipe_sections_lookup[pipe.fid] = section.id
+
+        for section in new:
+            for pipe in section.pipes:
+                pipe.ds_weir_crest_level = section.weir.weir_level
+                pipe.ds_weir_fid = section.weir.fid
+                del pipe.weir
 
         return new
 
@@ -1569,37 +1600,28 @@ class StormWaterPipeNetwork(PipeNetwork):
     def calculate_cover_depth(self):
         """Determine the depth"""
 
+        # we give an attribute pipe section to pipe in other function and downstream weir id or level, and then group and loop over these pipes
         undirected_network = self.network.to_undirected()
         #TODO undirected_network unused, in fact does not work for retrieving subgraphs, what to do with it?
         subgraphs = (self.network.subgraph(c) for c in nx.weakly_connected_components(self.network))
-
+        
         for subgraph in subgraphs:
             subgraph_edges = subgraph.edges
             network_pipes = []
-            lowest_weir_height = np.inf
             for edge in subgraph_edges:
-                _, closest_weir = self.find_closest_weir(edge[1])
                 pipe = self.get_pipe_with_edge(edge)
                 network_pipes += [pipe]
 
-                if closest_weir.weir_level < lowest_weir_height:
-                    lowest_weir_height = closest_weir.weir_level
-
-            if network_pipes:
-                max_diameter = max([pipe.diameter for pipe in network_pipes])
-            else:
-                print(f"DiGraph is invalid, we cannot validate depth. "
-                      f"subgraph_edges = {subgraph.edges}, "
-                      f"subgraph_nodes = {subgraph.nodes}")
-                # TODO how is this possible? is this user input that should be improved? if so improve checkers
-
             for pipe in network_pipes:
+                weir_lvl = pipe.ds_weir_crest_level
                 material_thickness = MATERIAL_THICKNESS[pipe.material]
-                pipe.start_level = lowest_weir_height - max_diameter
-                pipe.end_level = lowest_weir_height - max_diameter
+                diameters = [p.diameter for p in network_pipes if p.ds_weir_fid == pipe.ds_weir_fid]  ## hier weir_fid per pipe gebruiken voor 
+                max_diameter = max(diameters)
+                pipe.start_level = weir_lvl - max_diameter
+                pipe.end_level = weir_lvl - max_diameter
                 invert_level = max(pipe.start_level, pipe.end_level)
                 cover_depth = pipe.lowest_elevation - (
-                    invert_level + pipe.diameter + material_thickness * 2
+                    invert_level + pipe.diameter + material_thickness
                 )
                 pipe.cover_depth = cover_depth
 

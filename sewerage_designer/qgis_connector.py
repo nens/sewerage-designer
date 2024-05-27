@@ -363,4 +363,24 @@ def core_to_layer(network, layer):
                         update_field(
                             layer, feature, field, round(float(pipe.start_level), 2)
                         )
+            elif field == "ds_weir_crest_level":
+                features = get_features(layer)
+                for feature in features:
+                    feature_fid = feature["fid"]
+                    feature_update = feature["update"]
+                    pipe = network.pipes[feature_fid]
+                    if pipe.ds_weir_crest_level is not None and feature_update:
+                        update_field(
+                            layer, feature, field, round(float(pipe.ds_weir_crest_level), 2)
+                        )
+            elif field == "ds_weir_fid":
+                features = get_features(layer)
+                for feature in features:
+                    feature_fid = feature["fid"]
+                    feature_update = feature["update"]
+                    pipe = network.pipes[feature_fid]
+                    if pipe.ds_weir_fid is not None and feature_update:
+                        update_field(
+                            layer, feature, field, int(pipe.ds_weir_fid)
+                        )
     return empty_accumulated_fields

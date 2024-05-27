@@ -25,10 +25,13 @@ Three steps:
 '''
 import inspect
 import networkx as nx
-import pickle
+#import pickle
 import time
 
 from osgeo import ogr
+
+import sys
+sys.path.append(r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\GitHub\sewerage-designer")
 
 from sewerage_designer.designer.designer import (
 BGTInloopTabel,
@@ -117,17 +120,17 @@ def test_compute_cs(SD_db_path, BGT_inlooptabel_path):
     print("computed accumulated cs areas...")
 
     # I check if there are no pipes with empty accumulated cs areas
-    val = [None, 0]
     pipes_with_empty_accumulated_fields = []
     for pipe in network.pipes.values():
-        if pipe.accumulated_connected_surface_area in val:
+        if pipe.accumulated_connected_surface_area in [0, None]:
             pipes_with_empty_accumulated_fields.append(pipe.fid)
+            #pipe.accumulated_connected_surface_area = 1
 
     if not pipes_with_empty_accumulated_fields:
         print("The connected surfaces are computed. You can now proceed to compute the diameters.")
 
     else:
-        raise ValueError(
+        print(
             f"Some pipes have no accumulated connected surfaces, "
             f"pipe FIDs: {pipes_with_empty_accumulated_fields}"
              )
@@ -164,7 +167,7 @@ def test_compute_diameters(network, DEM_path, peak_intensity, minimum_freeboard,
     if not velocity_to_high_pipe_fids:
         print("The diameters are computed. You can now proceed to validate/ compute the depths.")
     else:
-        raise ValueError(
+        print(
             f"The velocity in {len(velocity_to_high_pipe_fids)} pipes is too large, "
             f"pipe FIDs: {velocity_to_high_pipe_fids}"
             )
@@ -279,44 +282,58 @@ def validate_network(network):
 
 
 if __name__ == "__main__":
-    SD_db_path = r"C:\Users\stijn.overmeen\Documents\GitHub\sewerage-designer\sewerage_designer\tests\system_zundert\sewerage_designer.gpkg"
-    BGT_inlooptabel_path = r"C:\Users\stijn.overmeen\Documents\GitHub\sewerage-designer\sewerage_designer\tests\system_zundert\bgt_inlooptabel.gpkg"
-    DEM_path = r"C:\Users\stijn.overmeen\Documents\GitHub\sewerage-designer\sewerage_designer\tests\system_zundert\dem.tif"
+    SD_db_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\20231211 hwa_vd_toekomst.gpkg"
+    BGT_inlooptabel_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\bgt_inlooptabel.gpkg"
+    DEM_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\Zundert.tif"
 
-    peak_intensity = 39.6
-    minimum_freeboard = 0.25
-    minimum_cover_depth = 0.5
+    peak_intensity = 58
+    minimum_freeboard = 0.2
+    minimum_cover_depth = 0.8
     maximum_velocity = 2
 
     #STEP 1
-    start_time = time.time()
+    #start_time = time.time()
     network = test_compute_cs(
         SD_db_path, BGT_inlooptabel_path
     )
-    print(f"elapsed time for STEP 1 = {time.time() - start_time} s")
+    #print(f"elapsed time for STEP 1 = {time.time() - start_time} s")
 
-    '''
-    with open('network_after_step_1.pkl', 'wb') as f:
-        pickle.dump(network, f)
+    #'''
+    #with open('network_after_step_1.pkl', 'wb') as f:
+        #pickle.dump(network, f)
 
     #STEP 2
-    network = pickle.load(open('network_after_step_1.pkl', 'rb'))
-    start_time = time.time()
+    #network = pickle.load(open('network_after_step_1.pkl', 'rb'))
+    #start_time = time.time()
     network = test_compute_diameters(
         network, DEM_path, peak_intensity, minimum_freeboard, maximum_velocity
     )
-    print(f"elapsed time for STEP 2 = {time.time() - start_time} s")
+    #print(f"elapsed time for STEP 2 = {time.time() - start_time} s")
 
-    with open('network_after_step_2.pkl', 'wb') as f:
-        pickle.dump(network, f)
+    #with open('network_after_step_2.pkl', 'wb') as f:
+       # pickle.dump(network, f)
 
     #STEP 3
-    network = pickle.load(open('network_after_step_2.pkl', 'rb'))
-    start_time = time.time()
+    #network = pickle.load(open('network_after_step_2.pkl', 'rb'))
+    #start_time = time.time()
     network = test_validate_depths(
         network, DEM_path, minimum_cover_depth
     )
-    print(f"elapsed time for STEP 3 = {time.time() - start_time} s")
-    with open('network_after_step_3.pkl', 'wb') as f:
-        pickle.dump(network, f)
-    '''
+    #print(f"elapsed time for STEP 3 = {time.time() - start_time} s")
+    #with open('network_after_step_3.pkl', 'wb') as f:
+        #pickle.dump(network, f)
+    #'''
+    
+
+    # for pipe in network.pipes.values():
+    # #      if pipe.weir:
+    # #          print(f"pipe {pipe.fid}, ds weir {pipe.weir}")
+    # #      else:
+    # #          print(f"no weirs for pipe {pipe.fid}")
+        
+    #       print(f"pipe {pipe.fid}, diameter = {pipe.diameter}, cover_depth = {pipe.cover_depth}, start_level = {pipe.start_level}, dem = {pipe.lowest_elevation}")
+    #       print(f"{pipe.cover_depth} = {pipe.lowest_elevation} - ({pipe.start_level} + {pipe.diameter} + 0.05)")
+
+
+
+

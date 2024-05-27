@@ -23,8 +23,8 @@
 """
 
 from osgeo import gdal
-from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt
+from qgis.core import QgsProject, QgsSettings
+from qgis.PyQt.QtCore import QTranslator, QCoreApplication, Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
@@ -54,7 +54,7 @@ class SewerageDesigner:
         self.plugin_dir = os.path.dirname(__file__)
 
         # initialize locale
-        locale = QSettings().value("locale/userLocale")[0:2]
+        locale = QgsSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
             self.plugin_dir, "i18n", "SewerageDesigner_{}.qm".format(locale)
         )
