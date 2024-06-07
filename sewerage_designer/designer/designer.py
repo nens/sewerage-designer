@@ -8,7 +8,6 @@ Created on Wed Dec  8 14:49:31 2021
 """
 # @Leendert
 # TODO seems too much code for one script
-# TODO the hydraulic gradient computation seems rushed, chaotic and maybe even unfinished
 # TODO make max_hydraulic_gradient an attribute of PipeNetwork instead of Pipe
 
 # First-party imports
@@ -1419,7 +1418,6 @@ class PipeNetwork:
                         ### print(f"pipe {pipe.fid}, meest upstream pipe van een section, en meest downstream connecting pipe node van sectie is {pipe_node}")
                         from_pipe = True
                         from_weir = False
-                        ### print(f"hier komt pipe {pipe.fid} langs met start weir waarde: {start_weir}")
                         ds_pipes = PipeSection(self.find_downstream_pipes(pipe_node)).pipes # all pipes downstream of this section
                         for ds_pipe in ds_pipes:
                             if hasattr(ds_pipe, "weir") and not ds_pipe.weir is None: # check which ds weir value the first downstream pipe has with a weir value
@@ -1462,9 +1460,8 @@ class PipeNetwork:
                 section.from_upstream_pipe = to_pipe  # always false due to one section.
                 section.to_downstream_pipe = from_pipe
                 section.to_downstream_weir = from_weir
-                section.downstream_weir = start_weir
+                section.downstream_weir = pipe.weir
                 if start_weir:
-                    pipe.weir = start_weir ## correct
                     pipe.ds_weir_crest_level = start_weir.weir_level
                     section.downstream_weir_elevation = (
                         start_weir.weir_level + start_weir.crest_flow_depth
@@ -1547,7 +1544,7 @@ class PipeNetwork:
         for section in new:
             for pipe in section.pipes:
                 if pipe.weir is not None: 
-                    section.weir = pipe.weir # retrieve from the one pipe of which we know we the ds weir
+                    section.weir = pipe.weir # retrieve from the one pipe of which we know the ds weir
                 self.pipe_sections_lookup[pipe.fid] = section.id
 
         for section in new:
