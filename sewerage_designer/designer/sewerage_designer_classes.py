@@ -608,7 +608,7 @@ class PipeNetwork:
         self.hd_data = {pipe.fid: [] for pipe in self.pipes.values()}
 
         for weir in self.weirs.values():
-            if not weir.external:  # lose the internal weirs.
+            if not weir.external:  # lose the internal weirs. # TODO
                 continue
             # First we derive the furthest edge for computing the first
             # hydraulic head.
@@ -850,6 +850,10 @@ class PipeNetwork:
         # TODO Walk the network and determine that there are no decreases in diameter
         pass
 
+    def calculate_cover_depth(self):
+        stormwaterpipenetwork = StormWaterPipeNetwork(self.network)
+        stormwaterpipenetwork.calculate_cover_depth()
+
 
 class StormWaterPipeNetwork(PipeNetwork):
 
@@ -862,6 +866,8 @@ class StormWaterPipeNetwork(PipeNetwork):
 
         undirected_network = self.network.to_undirected()
         subgraphs = nx.weakly_connected_component_subgraphs(self.network)
+        print(f"number of subgraphs {len(subgraphs)}")
+        #raise
 
         for subgraph in subgraphs:
             subgraph_edges = subgraph.edges
