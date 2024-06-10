@@ -16,7 +16,7 @@ about=Input:
 	 - sewer system geometry including diameters and depths (gpkg)
 
 	For detailed information please check the manual. Click 'Open manual' in the plug-in.
-version=1.0.2
+version=1.0.3
 author=Nelen & Schuurmans
 email=info@nelen-schuurmans.nl
 tracker=https://github.com/nens/sewerage-designer/issues
@@ -28,6 +28,7 @@ repository=https://github.com/nens/sewerage-designer
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
 # changelog=
+1.0.3. Bugfix: Pipe levels for internal pipe sections (upstream of internal weir) are now correctly validated.
 
 # Tags are comma separated with spaces allowed
 tags=sewerage, sewer, automatic, design, validation, BGT
