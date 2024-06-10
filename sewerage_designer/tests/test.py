@@ -285,9 +285,14 @@ if __name__ == "__main__":
     SD_db_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\20231211 hwa_vd_toekomst.gpkg"
     BGT_inlooptabel_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\bgt_inlooptabel.gpkg"
     DEM_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\Zundert.tif"
+    
+    #SD_db_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\Medemblik\ontwerp_met_sewerage_designer.gpkg"
+    #BGT_inlooptabel_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\Medemblik\bgt_inlooptabel_oude_format.gpkg"
+    #DEM_path = r"C:\Users\rutger.wiebing\OneDrive - Nelen & Schuurmans\Documents\Sewerage Designer\Medemblik\dem_medemblik_nieuw.tif"
 
     peak_intensity = 58
-    minimum_freeboard = 0.2
+
+    minimum_freeboard = 0.3
     minimum_cover_depth = 0.8
     maximum_velocity = 2
 
@@ -325,11 +330,11 @@ if __name__ == "__main__":
     #'''
     
 
-    # for pipe in network.pipes.values():
-    # #      if pipe.weir:
-    # #          print(f"pipe {pipe.fid}, ds weir {pipe.weir}")
-    # #      else:
-    # #          print(f"no weirs for pipe {pipe.fid}")
+    for pipe in network.pipes.values():
+        if pipe.ds_weir_fid:
+            print(f"pipe {pipe.fid}, ds weir {pipe.ds_weir_fid}")
+        else:
+            print(f"no weirs for pipe {pipe.fid}")
         
     #       print(f"pipe {pipe.fid}, diameter = {pipe.diameter}, cover_depth = {pipe.cover_depth}, start_level = {pipe.start_level}, dem = {pipe.lowest_elevation}")
     #       print(f"{pipe.cover_depth} = {pipe.lowest_elevation} - ({pipe.start_level} + {pipe.diameter} + 0.05)")
