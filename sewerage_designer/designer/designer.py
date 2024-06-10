@@ -501,6 +501,7 @@ class PipeSection:
         self.pipes = list_of_pipes
 
         self.id = None
+        self.weir = None
         self.drowned = None
         self.downstream_hydraulic_head = None
         self.downstream_weir = None
@@ -1333,6 +1334,8 @@ class PipeNetwork:
                 for internal_weir in weirs:
                     if internal_weir.fid in [w.fid for w in used_weirs]:
                         start_weir = internal_weir  # first pipe of a new section, internal = false
+                        pipe.weir = start_weir
+                        pipe.ds_weir_crest_level = start_weir.weir_level
                     else:
                         end_weir = internal_weir
 
@@ -1542,10 +1545,16 @@ class PipeNetwork:
 
         self.pipe_sections_lookup = {}
         for section in new:
+            assigned_weir = False
             for pipe in section.pipes:
                 if pipe.weir is not None: 
                     section.weir = pipe.weir # retrieve from the one pipe of which we know the ds weir
+                    assigned_weir = True
                 self.pipe_sections_lookup[pipe.fid] = section.id
+
+            # check if section has a weir
+            if not assigned_weir:
+                raise ValueError(f"Pipe section without downstream weir. Section with pipes {section.pipes}. Please improve sewerage and weir schematisation.")
 
         for section in new:
             for pipe in section.pipes:
@@ -1593,6 +1602,7 @@ class StormWaterPipeNetwork(PipeNetwork):
     def __init__(self):
         super().__init__()
         self.network_type = "infiltratieriool"
+        self.weir = None
 
     def calculate_cover_depth(self):
         """Determine the depth"""
